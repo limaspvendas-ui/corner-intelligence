@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Corner Intelligence API",
+    "version": "1.0.0",
+    "description": "API factual para busca e auditoria de jogos de futebol. Nao gera probabilidades ou recomendacoes quando os dados/modelos nao estiverem validados."
+  },
+  "servers": [
+    {"url": "https://corner-intelligence.onrender.com"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Verifica se o servico e a chave da API-Football estao configurados",
+        "responses": {"200": {"description": "OK"}}
+      }
+    },
+    "/api/daily": {
+      "get": {
+        "operationId": "getDailyEligibleFixtures",
+        "summary": "Lista jogos elegiveis da whitelist por data",
+        "parameters": [
+          {"name": "date", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}}
+        ],
+        "responses": {"200": {"description": "Jogos elegiveis"}}
+      }
+    },
+    "/api/deep-dive": {
+      "get": {
+        "operationId": "getFixtureDeepDive",
+        "summary": "Coleta dados factuais aprofundados de uma partida",
+        "parameters": [
+          {"name": "fixture", "in": "query", "required": true, "schema": {"type": "integer"}}
+        ],
+        "responses": {"200": {"description": "Deep dive factual"}}
+      }
+    },
+    "/api/test-data": {
+      "get": {
+        "operationId": "runAutomaticDataTest",
+        "summary": "Escolhe automaticamente uma partida elegivel e executa deep dive factual",
+        "parameters": [
+          {"name": "date", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}}
+        ],
+        "responses": {"200": {"description": "Resultado do teste"}}
+      }
+    }
+  }
+}
