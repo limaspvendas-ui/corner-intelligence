@@ -7,7 +7,6 @@ from flask import Flask, jsonify, request
 from config import PROJECT_RULES, WHITELIST_COMPETITIONS
 
 app = Flask(__name__)
-
 API_BASE_URL = "https://v3.football.api-sports.io"
 
 
@@ -34,16 +33,83 @@ def compact_fixture(item):
     fixture = item.get("fixture", {})
     league = item.get("league", {})
     teams = item.get("teams", {})
-    goals = item.get("goals", {})
     return {
         "fixture_id": fixture.get("id"),
         "kickoff": fixture.get("date"),
         "status": fixture.get("status"),
-        "league": {"id": league.get("id"), "name": league.get("name"), "country": league.get("country")},
+        "league": {"id": league.get("id"), "name": league.get("name"), "country": league.get("country"), "season": league.get("season")},
         "home": teams.get("home"),
         "away": teams.get("away"),
-        "goals": goals,
+        "goals": item.get("goals", {}),
     }
+
+
+def collect_deep_dive(fixture_id):
+    fixture_data, error = api_get("/fixtures", {"id": fixture_id})
+    if error:
+        return None, error
+    response = fixture_data.get("response", [])
+    if not response:
+        return None, (jsonify({"error": "Partida nao encontrada.", "fixture_id": fixture_id}), 404)
+
+    match = response[0]
+    teams = match.get("teams", {})
+    home_id = (teams.get("home") or {}).get("id")
+    away_id = (teams.get("away") or {}).get("id")
+    league = match.get("league", {})
+    season = league.get("season")
+
+    facts = {"fixture": compact_fixture(match)}
+    missing = []
+
+    statistics, stat_error = api_get("/fixtures/statistics", {"fixture": fixture_id})
+    if stat_error:
+        facts["fixture_statistics"] = None
+        missing.append("fixture_statistics")
+    else:
+        stats_response = statistics.get("response", [])
+        facts["fixture_statistics"] = stats_response if stats_response else None
+        if not stats_response:
+            missing.append("fixture_statistics")
+
+    for label, team_id in (("home", home_id), ("away", away_id)):
+        if not team_id:
+            facts[f"{label}_recent"] = None
+            missing.append(f"{label}_team_id")
+            continue
+        recent, recent_error = api_get("/fixtures", {"team": team_id, "last": 10})
+        if recent_error:
+            facts[f"{label}_recent"] = None
+            missing.append(f"{label}_recent")
+        else:
+            recent_items = [compact_fixture(x) for x in recent.get("response", [])]
+            facts[f"{label}_recent"] = recent_items if recent_items else None
+            if not recent_items:
+                missing.append(f"{label}_recent")
+
+    if league.get("id") and season:
+        standings, standings_error = api_get("/standings", {"league": league.get("id"), "season": season})
+        if standings_error:
+            facts["standings"] = None
+            missing.append("standings")
+        else:
+            standings_response = standings.get("response", [])
+            facts["standings"] = standings_response if standings_response else None
+            if not standings_response:
+                missing.append("standings")
+    else:
+        facts["standings"] = None
+        missing.append("league_or_season")
+
+    return {
+        "fixture_id": fixture_id,
+        "source": "API-Football",
+        "mode": "FACT_ONLY_DEEP_DIVE",
+        "facts": facts,
+        "missing_data": sorted(set(missing)),
+        "evaluation_status": "NAO AVALIAVEL" if missing else "DADOS COLETADOS",
+        "note": "Coleta factual para validar insumos. Nenhuma probabilidade ou aposta e calculada nesta rota.",
+    }, None
 
 
 @app.get("/")
@@ -77,7 +143,6 @@ def daily():
     date = request.args.get("date")
     if not date:
         return jsonify({"error": "Parametro date e obrigatorio no formato YYYY-MM-DD."}), 400
-
     data, error = api_get("/fixtures", {"date": date})
     if error:
         return error
@@ -88,22 +153,9 @@ def daily():
         league_id = league.get("id")
         if league_id not in WHITELIST_COMPETITIONS:
             continue
-        fixture = item.get("fixture", {})
-        teams = item.get("teams", {})
-        selected.append({
-            "fixture_id": fixture.get("id"),
-            "kickoff": fixture.get("date"),
-            "timezone": fixture.get("timezone"),
-            "status": fixture.get("status"),
-            "league": {
-                "id": league_id,
-                "name": league.get("name"),
-                "country": league.get("country"),
-                "whitelist_name": WHITELIST_COMPETITIONS[league_id],
-            },
-            "home": teams.get("home"),
-            "away": teams.get("away"),
-        })
+        compact = compact_fixture(item)
+        compact["league"]["whitelist_name"] = WHITELIST_COMPETITIONS[league_id]
+        selected.append(compact)
 
     selected.sort(key=lambda x: x.get("kickoff") or "")
     return jsonify({
@@ -123,62 +175,44 @@ def deep_dive():
     fixture_id = request.args.get("fixture")
     if not fixture_id:
         return jsonify({"error": "Parametro fixture e obrigatorio."}), 400
+    result, error = collect_deep_dive(fixture_id)
+    return error if error else jsonify(result)
 
-    fixture_data, error = api_get("/fixtures", {"id": fixture_id})
+
+@app.get("/api/test-data")
+def test_data():
+    date = request.args.get("date")
+    if not date:
+        return jsonify({"error": "Parametro date e obrigatorio no formato YYYY-MM-DD."}), 400
+
+    data, error = api_get("/fixtures", {"date": date})
     if error:
         return error
-    response = fixture_data.get("response", [])
-    if not response:
-        return jsonify({"error": "Partida nao encontrada.", "fixture_id": fixture_id}), 404
 
-    match = response[0]
-    teams = match.get("teams", {})
-    home_id = (teams.get("home") or {}).get("id")
-    away_id = (teams.get("away") or {}).get("id")
-    league = match.get("league", {})
-    season = league.get("season")
+    eligible = []
+    for item in data.get("response", []):
+        league_id = item.get("league", {}).get("id")
+        fixture_id = item.get("fixture", {}).get("id")
+        if league_id in WHITELIST_COMPETITIONS and fixture_id:
+            eligible.append(item)
 
-    facts = {"fixture": compact_fixture(match)}
-    missing = []
+    eligible.sort(key=lambda x: x.get("fixture", {}).get("date") or "")
+    if not eligible:
+        return jsonify({"date": date, "error": "Nenhuma partida elegivel encontrada na whitelist."}), 404
 
-    statistics, stat_error = api_get("/fixtures/statistics", {"fixture": fixture_id})
-    if stat_error:
-        statistics = None
-        missing.append("fixture_statistics")
-    facts["fixture_statistics"] = statistics.get("response", []) if statistics else None
+    chosen = eligible[0]
+    fixture_id = chosen.get("fixture", {}).get("id")
+    result, deep_error = collect_deep_dive(fixture_id)
+    if deep_error:
+        return deep_error
 
-    for label, team_id in (("home", home_id), ("away", away_id)):
-        if not team_id:
-            facts[f"{label}_recent"] = None
-            missing.append(f"{label}_team_id")
-            continue
-        recent, recent_error = api_get("/fixtures", {"team": team_id, "last": 10})
-        if recent_error:
-            facts[f"{label}_recent"] = None
-            missing.append(f"{label}_recent")
-        else:
-            facts[f"{label}_recent"] = [compact_fixture(x) for x in recent.get("response", [])]
-
-    if league.get("id") and season:
-        standings, standings_error = api_get("/standings", {"league": league.get("id"), "season": season})
-        if standings_error:
-            facts["standings"] = None
-            missing.append("standings")
-        else:
-            facts["standings"] = standings.get("response", [])
-    else:
-        facts["standings"] = None
-        missing.append("league_or_season")
-
-    return jsonify({
-        "fixture_id": fixture_id,
-        "source": "API-Football",
-        "mode": "FACT_ONLY_DEEP_DIVE",
-        "facts": facts,
-        "missing_data": missing,
-        "evaluation_status": "NAO AVALIAVEL" if missing else "DADOS COLETADOS",
-        "note": "Coleta factual para validar insumos. Nenhuma probabilidade ou aposta e calculada nesta rota.",
-    })
+    result["automatic_test"] = {
+        "date": date,
+        "eligible_count": len(eligible),
+        "selection_rule": "primeira partida elegivel por horario; teste tecnico, nao recomendacao",
+        "selected_fixture": compact_fixture(chosen),
+    }
+    return jsonify(result)
 
 
 @app.get("/api/fixtures/statistics")
