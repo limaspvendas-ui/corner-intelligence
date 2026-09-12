@@ -1,5 +1,7 @@
+import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 from flask import Flask, jsonify, request
@@ -51,14 +53,12 @@ def collect_deep_dive(fixture_id):
     response = fixture_data.get("response", [])
     if not response:
         return None, (jsonify({"error": "Partida nao encontrada.", "fixture_id": fixture_id}), 404)
-
     match = response[0]
     teams = match.get("teams", {})
     home_id = (teams.get("home") or {}).get("id")
     away_id = (teams.get("away") or {}).get("id")
     league = match.get("league", {})
     season = league.get("season")
-
     facts = {"fixture": compact_fixture(match)}
     missing = []
 
@@ -114,17 +114,19 @@ def collect_deep_dive(fixture_id):
 
 @app.get("/")
 def home():
-    return jsonify({
-        "service": "Corner Intelligence",
-        "status": "online",
-        "message": "Backend ativo. API key nunca e exibida por este servico.",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    return jsonify({"service": "Corner Intelligence", "status": "online", "message": "Backend ativo. API key nunca e exibida por este servico.", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "api_key_configured": bool(os.getenv("API_FOOTBALL_KEY"))})
+
+
+@app.get("/openapi.json")
+def openapi_schema():
+    schema_path = Path(__file__).with_name("openapi.json")
+    with schema_path.open("r", encoding="utf-8") as handle:
+        return jsonify(json.load(handle))
 
 
 @app.get("/api/fixtures")
@@ -146,7 +148,6 @@ def daily():
     data, error = api_get("/fixtures", {"date": date})
     if error:
         return error
-
     selected = []
     for item in data.get("response", []):
         league = item.get("league", {})
@@ -156,18 +157,8 @@ def daily():
         compact = compact_fixture(item)
         compact["league"]["whitelist_name"] = WHITELIST_COMPETITIONS[league_id]
         selected.append(compact)
-
     selected.sort(key=lambda x: x.get("kickoff") or "")
-    return jsonify({
-        "date": date,
-        "source": "API-Football",
-        "priority": PROJECT_RULES["priority"],
-        "max_approved_per_day": PROJECT_RULES["max_approved_per_day"],
-        "total_api_fixtures": len(data.get("response", [])),
-        "eligible_count": len(selected),
-        "eligible_fixtures": selected,
-        "note": "Esta rota apenas organiza partidas elegiveis. Nao inventa probabilidades nem aprova apostas.",
-    })
+    return jsonify({"date": date, "source": "API-Football", "priority": PROJECT_RULES["priority"], "max_approved_per_day": PROJECT_RULES["max_approved_per_day"], "total_api_fixtures": len(data.get("response", [])), "eligible_count": len(selected), "eligible_fixtures": selected, "note": "Esta rota apenas organiza partidas elegiveis. Nao inventa probabilidades nem aprova apostas."})
 
 
 @app.get("/api/deep-dive")
@@ -184,34 +175,19 @@ def test_data():
     date = request.args.get("date")
     if not date:
         return jsonify({"error": "Parametro date e obrigatorio no formato YYYY-MM-DD."}), 400
-
     data, error = api_get("/fixtures", {"date": date})
     if error:
         return error
-
-    eligible = []
-    for item in data.get("response", []):
-        league_id = item.get("league", {}).get("id")
-        fixture_id = item.get("fixture", {}).get("id")
-        if league_id in WHITELIST_COMPETITIONS and fixture_id:
-            eligible.append(item)
-
+    eligible = [item for item in data.get("response", []) if item.get("league", {}).get("id") in WHITELIST_COMPETITIONS and item.get("fixture", {}).get("id")]
     eligible.sort(key=lambda x: x.get("fixture", {}).get("date") or "")
     if not eligible:
         return jsonify({"date": date, "error": "Nenhuma partida elegivel encontrada na whitelist."}), 404
-
     chosen = eligible[0]
     fixture_id = chosen.get("fixture", {}).get("id")
     result, deep_error = collect_deep_dive(fixture_id)
     if deep_error:
         return deep_error
-
-    result["automatic_test"] = {
-        "date": date,
-        "eligible_count": len(eligible),
-        "selection_rule": "primeira partida elegivel por horario; teste tecnico, nao recomendacao",
-        "selected_fixture": compact_fixture(chosen),
-    }
+    result["automatic_test"] = {"date": date, "eligible_count": len(eligible), "selection_rule": "primeira partida elegivel por horario; teste tecnico, nao recomendacao", "selected_fixture": compact_fixture(chosen)}
     return jsonify(result)
 
 
