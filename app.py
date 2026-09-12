@@ -52,77 +52,65 @@ def compact_fixture(item):
     }
 
 
-def corner_map(stats_response):
-    out = {}
-    for block in stats_response or []:
+def get_corner_value(stats_list):
+    for stat in stats_list or []:
+        if stat.get("type") == "Corner Kicks":
+            return stat.get("value")
+    return None
+
+
+def parse_corner_blocks(response, home_id, away_id, target_team_id):
+    by_team = {}
+    for block in response or []:
         team = block.get("team") or {}
         tid = team.get("id")
         if not tid:
             continue
-        value = None
-        for stat in block.get("statistics") or []:
-            if stat.get("type") == "Corner Kicks":
-                value = stat.get("value")
-                break
-        out[tid] = value
-    return out
+        by_team[tid] = {
+            "fulltime": get_corner_value(block.get("statistics")),
+            "first_half": get_corner_value(block.get("statistics_1h")),
+            "second_half": get_corner_value(block.get("statistics_2h")),
+        }
+
+    def period_row(period):
+        home_c = (by_team.get(home_id) or {}).get(period)
+        away_c = (by_team.get(away_id) or {}).get(period)
+        target_c = (by_team.get(target_team_id) or {}).get(period)
+        return {
+            "home_corners": home_c,
+            "away_corners": away_c,
+            "match_total_corners": None if home_c is None or away_c is None else home_c + away_c,
+            "target_team_corners": target_c,
+        }
+
+    return {
+        "first_half": period_row("first_half"),
+        "second_half": period_row("second_half"),
+        "fulltime": period_row("fulltime"),
+    }
 
 
 def fetch_fixture_halves(item, target_team_id):
     fixture_id = (item.get("fixture") or {}).get("id")
-    base = compact_fixture(item)
-    result = {
-        "fixture": base,
-        "halftime": None,
-        "fulltime": None,
-        "second_half_derived": None,
-        "missing": [],
-    }
-
-    full_data, full_error = api_get("/fixtures/statistics", {"fixture": fixture_id})
-    half_data, half_error = api_get("/fixtures/statistics", {"fixture": fixture_id, "half": "true"})
-
-    if full_error:
-        result["missing"].append("fulltime_statistics")
-    if half_error:
-        result["missing"].append("halftime_statistics")
-
     home_id = ((item.get("teams") or {}).get("home") or {}).get("id")
     away_id = ((item.get("teams") or {}).get("away") or {}).get("id")
+    result = {"fixture": compact_fixture(item), "missing": []}
 
-    full_map = corner_map((full_data or {}).get("response", [])) if not full_error else {}
-    half_map = corner_map((half_data or {}).get("response", [])) if not half_error else {}
+    data, error = api_get(
+        "/fixtures/statistics",
+        {"fixture": fixture_id, "half": "true", "type": "Corner Kicks"},
+    )
+    if error:
+        result.update({"first_half": None, "second_half": None, "fulltime": None})
+        result["missing"].append("corner_statistics")
+        return result
 
-    full_home = full_map.get(home_id)
-    full_away = full_map.get(away_id)
-    half_home = half_map.get(home_id)
-    half_away = half_map.get(away_id)
-
-    result["fulltime"] = {
-        "home_corners": full_home,
-        "away_corners": full_away,
-        "match_total_corners": None if full_home is None or full_away is None else full_home + full_away,
-        "target_team_corners": full_map.get(target_team_id),
-    }
-    result["halftime"] = {
-        "home_corners": half_home,
-        "away_corners": half_away,
-        "match_total_corners": None if half_home is None or half_away is None else half_home + half_away,
-        "target_team_corners": half_map.get(target_team_id),
-    }
-
-    if all(v is not None for v in (full_home, full_away, half_home, half_away)):
-        second_home = full_home - half_home
-        second_away = full_away - half_away
-        result["second_half_derived"] = {
-            "home_corners": second_home,
-            "away_corners": second_away,
-            "match_total_corners": second_home + second_away,
-            "target_team_corners": second_home if target_team_id == home_id else second_away,
-        }
-    else:
-        result["missing"].append("second_half_corners")
-
+    parsed = parse_corner_blocks(data.get("response", []), home_id, away_id, target_team_id)
+    result.update(parsed)
+    for key in ("first_half", "second_half", "fulltime"):
+        row = result.get(key) or {}
+        if row.get("home_corners") is None or row.get("away_corners") is None:
+            result["missing"].append(f"{key}_corners")
     return result
 
 
@@ -140,7 +128,7 @@ def collect_team_corner_history(team_id, last=25):
     finished = finished[:last]
 
     rows = [None] * len(finished)
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         futures = {pool.submit(fetch_fixture_halves, item, team_id): i for i, item in enumerate(finished)}
         for fut in as_completed(futures):
             i = futures[fut]
@@ -149,9 +137,9 @@ def collect_team_corner_history(team_id, last=25):
             except Exception as exc:
                 rows[i] = {
                     "fixture": compact_fixture(finished[i]),
-                    "halftime": None,
+                    "first_half": None,
+                    "second_half": None,
                     "fulltime": None,
-                    "second_half_derived": None,
                     "missing": [str(exc)],
                 }
 
@@ -161,10 +149,7 @@ def collect_team_corner_history(team_id, last=25):
         "requested_last": last,
         "returned": len(rows),
         "matches": rows,
-        "note": (
-            "1o tempo vem de /fixtures/statistics?half=true; total vem de /fixtures/statistics; "
-            "2o tempo e calculado exatamente por total menos 1o tempo. Dados ausentes permanecem nulos."
-        ),
+        "note": "Escanteios do jogo, 1o tempo e 2o tempo lidos diretamente dos campos statistics, statistics_1h e statistics_2h retornados por /fixtures/statistics?half=true&type=Corner Kicks.",
     }, None
 
 
@@ -195,12 +180,15 @@ def collect_deep_dive(fixture_id):
         if not stats_response:
             missing.append("fixture_statistics")
 
-    half_stats, half_error = api_get("/fixtures/statistics", {"fixture": fixture_id, "half": "true"})
+    half_stats, half_error = api_get(
+        "/fixtures/statistics",
+        {"fixture": fixture_id, "half": "true", "type": "Corner Kicks"},
+    )
     if half_error:
-        facts["fixture_statistics_half_true"] = None
-        missing.append("fixture_statistics_half_true")
+        facts["fixture_corner_statistics_by_half"] = None
+        missing.append("fixture_corner_statistics_by_half")
     else:
-        facts["fixture_statistics_half_true"] = half_stats
+        facts["fixture_corner_statistics_by_half"] = half_stats.get("response", [])
 
     for label, team_id in (("home", home_id), ("away", away_id)):
         if not team_id:
@@ -230,17 +218,6 @@ def collect_deep_dive(fixture_id):
     else:
         facts["standings"] = None
         missing.append("league_or_season")
-
-    if home_id:
-        home_hist, home_hist_error = collect_team_corner_history(home_id, 25)
-        facts["home_corner_history_25"] = None if home_hist_error else home_hist
-        if home_hist_error:
-            missing.append("home_corner_history_25")
-    if away_id:
-        away_hist, away_hist_error = collect_team_corner_history(away_id, 25)
-        facts["away_corner_history_25"] = None if away_hist_error else away_hist
-        if away_hist_error:
-            missing.append("away_corner_history_25")
 
     return {
         "fixture_id": fixture_id,
