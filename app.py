@@ -200,6 +200,9 @@ def fixture_statistics():
     team = request.args.get("team")
     if team:
         params["team"] = team
+    half = request.args.get("half")
+    if half:
+        params["half"] = half
     data, error = api_get("/fixtures/statistics", params)
     return error if error else jsonify(data)
 
