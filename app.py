@@ -30,6 +30,22 @@ def api_get(path, params=None):
         return None, (jsonify({"error": "Falha ao consultar API-Football", "detail": str(exc)}), 502)
 
 
+def compact_fixture(item):
+    fixture = item.get("fixture", {})
+    league = item.get("league", {})
+    teams = item.get("teams", {})
+    goals = item.get("goals", {})
+    return {
+        "fixture_id": fixture.get("id"),
+        "kickoff": fixture.get("date"),
+        "status": fixture.get("status"),
+        "league": {"id": league.get("id"), "name": league.get("name"), "country": league.get("country")},
+        "home": teams.get("home"),
+        "away": teams.get("away"),
+        "goals": goals,
+    }
+
+
 @app.get("/")
 def home():
     return jsonify({
@@ -99,6 +115,69 @@ def daily():
         "eligible_count": len(selected),
         "eligible_fixtures": selected,
         "note": "Esta rota apenas organiza partidas elegiveis. Nao inventa probabilidades nem aprova apostas.",
+    })
+
+
+@app.get("/api/deep-dive")
+def deep_dive():
+    fixture_id = request.args.get("fixture")
+    if not fixture_id:
+        return jsonify({"error": "Parametro fixture e obrigatorio."}), 400
+
+    fixture_data, error = api_get("/fixtures", {"id": fixture_id})
+    if error:
+        return error
+    response = fixture_data.get("response", [])
+    if not response:
+        return jsonify({"error": "Partida nao encontrada.", "fixture_id": fixture_id}), 404
+
+    match = response[0]
+    teams = match.get("teams", {})
+    home_id = (teams.get("home") or {}).get("id")
+    away_id = (teams.get("away") or {}).get("id")
+    league = match.get("league", {})
+    season = league.get("season")
+
+    facts = {"fixture": compact_fixture(match)}
+    missing = []
+
+    statistics, stat_error = api_get("/fixtures/statistics", {"fixture": fixture_id})
+    if stat_error:
+        statistics = None
+        missing.append("fixture_statistics")
+    facts["fixture_statistics"] = statistics.get("response", []) if statistics else None
+
+    for label, team_id in (("home", home_id), ("away", away_id)):
+        if not team_id:
+            facts[f"{label}_recent"] = None
+            missing.append(f"{label}_team_id")
+            continue
+        recent, recent_error = api_get("/fixtures", {"team": team_id, "last": 10})
+        if recent_error:
+            facts[f"{label}_recent"] = None
+            missing.append(f"{label}_recent")
+        else:
+            facts[f"{label}_recent"] = [compact_fixture(x) for x in recent.get("response", [])]
+
+    if league.get("id") and season:
+        standings, standings_error = api_get("/standings", {"league": league.get("id"), "season": season})
+        if standings_error:
+            facts["standings"] = None
+            missing.append("standings")
+        else:
+            facts["standings"] = standings.get("response", [])
+    else:
+        facts["standings"] = None
+        missing.append("league_or_season")
+
+    return jsonify({
+        "fixture_id": fixture_id,
+        "source": "API-Football",
+        "mode": "FACT_ONLY_DEEP_DIVE",
+        "facts": facts,
+        "missing_data": missing,
+        "evaluation_status": "NAO AVALIAVEL" if missing else "DADOS COLETADOS",
+        "note": "Coleta factual para validar insumos. Nenhuma probabilidade ou aposta e calculada nesta rota.",
     })
 
 
