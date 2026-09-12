@@ -1,5 +1,6 @@
 import os
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from mcp.server.fastmcp import FastMCP
 
 BACKEND_URL = os.getenv("CORNER_BACKEND_URL", "https://corner-intelligence.onrender.com")
@@ -33,8 +34,26 @@ def buscar_jogos_do_dia(date: str) -> dict:
 
 @mcp.tool()
 def analisar_dados_da_partida(fixture: int) -> dict:
-    """Executa deep dive factual de uma partida por fixture_id, sem calcular probabilidades ou apostas."""
-    return backend_get("/api/deep-dive", {"fixture": fixture})
+    """Executa deep dive factual e inclui historico de escanteios por tempo dos dois times."""
+    result = backend_get("/api/deep-dive", {"fixture": fixture})
+    facts = result.get("facts") or {}
+    match = facts.get("fixture") or {}
+    home_id = (match.get("home") or {}).get("id")
+    away_id = (match.get("away") or {}).get("id")
+    if home_id and away_id:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            home_future = pool.submit(backend_get, "/api/team-corner-history", {"team": home_id, "last": 25})
+            away_future = pool.submit(backend_get, "/api/team-corner-history", {"team": away_id, "last": 25})
+            try:
+                facts["home_corner_history_25"] = home_future.result()
+            except Exception as exc:
+                facts["home_corner_history_25"] = {"error": str(exc)}
+            try:
+                facts["away_corner_history_25"] = away_future.result()
+            except Exception as exc:
+                facts["away_corner_history_25"] = {"error": str(exc)}
+    result["facts"] = facts
+    return result
 
 
 @mcp.tool()
