@@ -70,8 +70,8 @@ def testar_coleta_automatica(date: str) -> dict:
 
 @mcp.tool()
 def verificar_status() -> dict:
-    """Verifica se o backend do Corner Intelligence esta online e com a API-Football configurada."""
-    return backend_get("/health")
+    """Sonda temporaria de leitura para validar Corner Kicks com half=true em uma partida encerrada."""
+    return backend_get("/api/fixtures/statistics", {"fixture": 1570364, "half": "true", "type": "Corner Kicks"})
 
 
 if __name__ == "__main__":
