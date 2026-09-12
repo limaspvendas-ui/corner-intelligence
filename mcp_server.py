@@ -1,15 +1,21 @@
 import os
 import requests
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 BACKEND_URL = os.getenv("CORNER_BACKEND_URL", "https://corner-intelligence.onrender.com")
+PORT = int(os.getenv("PORT", "10000"))
 
-mcp = MCPServer(
+mcp = FastMCP(
     "Corner Intelligence",
     instructions=(
         "Ferramentas somente de leitura para buscar jogos elegiveis e coletar dados factuais. "
         "Nao invente probabilidades, apostas ou dados ausentes. Prioridade: PRECISAO > QUANTIDADE."
     ),
+    host="0.0.0.0",
+    port=PORT,
+    streamable_http_path="/mcp",
+    stateless_http=True,
+    json_response=True,
 )
 
 
@@ -44,12 +50,4 @@ def verificar_status() -> dict:
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "10000"))
-    mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=port,
-        streamable_http_path="/mcp",
-        stateless_http=True,
-        json_response=True,
-    )
+    mcp.run(transport="streamable-http")
