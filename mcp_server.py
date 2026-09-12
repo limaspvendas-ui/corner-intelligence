@@ -20,7 +20,7 @@ mcp = FastMCP(
 
 
 def backend_get(path: str, params: dict | None = None) -> dict:
-    response = requests.get(f"{BACKEND_URL}{path}", params=params or {}, timeout=45)
+    response = requests.get(f"{BACKEND_URL}{path}", params=params or {}, timeout=90)
     response.raise_for_status()
     return response.json()
 
@@ -35,6 +35,12 @@ def buscar_jogos_do_dia(date: str) -> dict:
 def analisar_dados_da_partida(fixture: int) -> dict:
     """Executa deep dive factual de uma partida por fixture_id, sem calcular probabilidades ou apostas."""
     return backend_get("/api/deep-dive", {"fixture": fixture})
+
+
+@mcp.tool()
+def buscar_historico_escanteios_por_tempo(team: int, last: int = 25) -> dict:
+    """Busca ate 25 jogos finalizados de um time e retorna escanteios do 1o e 2o tempo diretamente da API-Football."""
+    return backend_get("/api/team-corner-history", {"team": team, "last": last})
 
 
 @mcp.tool()
