@@ -1,5 +1,6 @@
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -46,6 +47,79 @@ def compact_fixture(item):
     }
 
 
+def corner_map(stats_response):
+    out = {}
+    for block in stats_response or []:
+        team = block.get("team") or {}
+        tid = team.get("id")
+        if not tid:
+            continue
+        value = None
+        for stat in block.get("statistics") or []:
+            if stat.get("type") == "Corner Kicks":
+                value = stat.get("value")
+                break
+        out[tid] = value
+    return out
+
+
+def fetch_fixture_halves(item, target_team_id):
+    fixture_id = (item.get("fixture") or {}).get("id")
+    base = compact_fixture(item)
+    result = {"fixture": base, "first_half": None, "second_half": None, "missing": []}
+    for half, key in ((1, "first_half"), (2, "second_half")):
+        data, error = api_get("/fixtures/statistics", {"fixture": fixture_id, "half": half})
+        if error:
+            result["missing"].append(f"half_{half}")
+            continue
+        cmap = corner_map(data.get("response", []))
+        home_id = ((item.get("teams") or {}).get("home") or {}).get("id")
+        away_id = ((item.get("teams") or {}).get("away") or {}).get("id")
+        home_c = cmap.get(home_id)
+        away_c = cmap.get(away_id)
+        target_c = cmap.get(target_team_id)
+        total_c = None if home_c is None or away_c is None else home_c + away_c
+        result[key] = {
+            "home_corners": home_c,
+            "away_corners": away_c,
+            "match_total_corners": total_c,
+            "target_team_corners": target_c,
+        }
+        if home_c is None or away_c is None:
+            result["missing"].append(f"half_{half}_corners")
+    return result
+
+
+def collect_team_corner_history(team_id, last=25):
+    fetch_last = max(last + 10, 35)
+    data, error = api_get("/fixtures", {"team": team_id, "last": fetch_last})
+    if error:
+        return None, error
+    finished = []
+    for item in data.get("response", []):
+        short = ((item.get("fixture") or {}).get("status") or {}).get("short")
+        if short in {"FT", "AET", "PEN"}:
+            finished.append(item)
+    finished = finished[:last]
+    rows = [None] * len(finished)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(fetch_fixture_halves, item, team_id): i for i, item in enumerate(finished)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                rows[i] = fut.result()
+            except Exception as exc:
+                rows[i] = {"fixture": compact_fixture(finished[i]), "first_half": None, "second_half": None, "missing": [str(exc)]}
+    return {
+        "source": "API-Football",
+        "team_id": team_id,
+        "requested_last": last,
+        "returned": len(rows),
+        "matches": rows,
+        "note": "Escanteios por tempo coletados diretamente de /fixtures/statistics com parametro half. Dados ausentes permanecem nulos.",
+    }, None
+
+
 def collect_deep_dive(fixture_id):
     fixture_data, error = api_get("/fixtures", {"id": fixture_id})
     if error:
@@ -61,7 +135,6 @@ def collect_deep_dive(fixture_id):
     season = league.get("season")
     facts = {"fixture": compact_fixture(match)}
     missing = []
-
     statistics, stat_error = api_get("/fixtures/statistics", {"fixture": fixture_id})
     if stat_error:
         facts["fixture_statistics"] = None
@@ -71,7 +144,6 @@ def collect_deep_dive(fixture_id):
         facts["fixture_statistics"] = stats_response if stats_response else None
         if not stats_response:
             missing.append("fixture_statistics")
-
     for label, team_id in (("home", home_id), ("away", away_id)):
         if not team_id:
             facts[f"{label}_recent"] = None
@@ -86,7 +158,6 @@ def collect_deep_dive(fixture_id):
             facts[f"{label}_recent"] = recent_items if recent_items else None
             if not recent_items:
                 missing.append(f"{label}_recent")
-
     if league.get("id") and season:
         standings, standings_error = api_get("/standings", {"league": league.get("id"), "season": season})
         if standings_error:
@@ -100,16 +171,7 @@ def collect_deep_dive(fixture_id):
     else:
         facts["standings"] = None
         missing.append("league_or_season")
-
-    return {
-        "fixture_id": fixture_id,
-        "source": "API-Football",
-        "mode": "FACT_ONLY_DEEP_DIVE",
-        "facts": facts,
-        "missing_data": sorted(set(missing)),
-        "evaluation_status": "NAO AVALIAVEL" if missing else "DADOS COLETADOS",
-        "note": "Coleta factual para validar insumos. Nenhuma probabilidade ou aposta e calculada nesta rota.",
-    }, None
+    return {"fixture_id": fixture_id, "source": "API-Football", "mode": "FACT_ONLY_DEEP_DIVE", "facts": facts, "missing_data": sorted(set(missing)), "evaluation_status": "NAO AVALIAVEL" if missing else "DADOS COLETADOS", "note": "Coleta factual para validar insumos. Nenhuma probabilidade ou aposta e calculada nesta rota."}, None
 
 
 @app.get("/")
@@ -167,6 +229,17 @@ def deep_dive():
     if not fixture_id:
         return jsonify({"error": "Parametro fixture e obrigatorio."}), 400
     result, error = collect_deep_dive(fixture_id)
+    return error if error else jsonify(result)
+
+
+@app.get("/api/team-corner-history")
+def team_corner_history():
+    team_id = request.args.get("team", type=int)
+    last = request.args.get("last", default=25, type=int)
+    if not team_id:
+        return jsonify({"error": "Parametro team e obrigatorio."}), 400
+    last = max(1, min(last, 25))
+    result, error = collect_team_corner_history(team_id, last)
     return error if error else jsonify(result)
 
 
