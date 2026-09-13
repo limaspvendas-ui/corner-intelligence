@@ -23,7 +23,9 @@ mcp = FastMCP(
 
 def backend_get(path: str, params: dict | None = None) -> dict:
     url = f"{BACKEND_URL}{path}"
-    retry_delays = (0, 2, 5, 10, 15)
+    # Render Free pode levar cerca de um minuto para acordar depois de 15 min ocioso.
+    # Mantemos a chamada viva por tempo suficiente para atravessar esse cold start.
+    retry_delays = (0, 5, 10, 15, 20, 20)
     last_error = None
 
     for attempt, delay in enumerate(retry_delays, start=1):
