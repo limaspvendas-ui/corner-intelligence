@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from concurrent.futures import ThreadPoolExecutor
 from mcp.server.fastmcp import FastMCP
@@ -21,9 +22,33 @@ mcp = FastMCP(
 
 
 def backend_get(path: str, params: dict | None = None) -> dict:
-    response = requests.get(f"{BACKEND_URL}{path}", params=params or {}, timeout=90)
-    response.raise_for_status()
-    return response.json()
+    url = f"{BACKEND_URL}{path}"
+    retry_delays = (0, 2, 5, 10, 15)
+    last_error = None
+
+    for attempt, delay in enumerate(retry_delays, start=1):
+        if delay:
+            time.sleep(delay)
+        try:
+            response = requests.get(url, params=params or {}, timeout=90)
+            if response.status_code in {502, 503, 504} and attempt < len(retry_delays):
+                last_error = requests.HTTPError(
+                    f"Backend temporariamente indisponivel: HTTP {response.status_code}",
+                    response=response,
+                )
+                continue
+            response.raise_for_status()
+            return response.json()
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_error = exc
+            if attempt >= len(retry_delays):
+                raise
+        except requests.HTTPError:
+            raise
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Falha inesperada ao consultar o backend do Corner Intelligence.")
 
 
 @mcp.tool()
