@@ -30,6 +30,12 @@ data/*.db-shm
 
 # Backups por etapa (nao versionaveis)
 backups/
+data/*.db.bak_*
+data/*.bak
+
+# Dumps de validacao (JSON/auxiliares da macroetapa de validacao) — produtos
+# de auditoria, nao versionaveis. O relatorio final vive em docs/.
+data/validacao_multifonte/
 
 # Respostas brutas da auditoria multi-fonte (Etapa 5F-D): payloads de fontes
 # externas, podem conter dados crus; NUNCA versionar. Tokens redactados.
