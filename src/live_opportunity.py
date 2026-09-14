@@ -282,6 +282,12 @@ class Candidato:
     # MATRIZ DE COBERTURA (camada de elegibilidade): veredictos
     # GOALS/CORNERS/CARDS desta leitura (None em nada foi convertido)
     cobertura: list[Any] = field(default_factory=list)
+    # ETAPA 3: janelas de pressao temporal 5/10/15 min (EXPERIMENTAL /
+    # A CALIBRAR). Info auditavel apenas - NAO altera aprobacao. None
+    # quando o deep dive nao calculou (opt-in); lista vazia quando o
+    # motor consultou mas nao havia historico suficiente (todas NAO
+    # AVALIAVEIS). Nenhum threshold operacional validado aqui.
+    pressao: list[Any] | None = None
 
 
 @dataclass
@@ -1152,6 +1158,7 @@ def deep_dive(
     client: APIFootballClient,
     snapshot: LiveSnapshot,
     mercados: tuple[str, ...] | None = None,
+    pressao: bool = False,
 ) -> Candidato:
     """Contexto pre-jogo + estado atual + odds ao vivo de UM candidato.
 
@@ -1163,6 +1170,13 @@ def deep_dive(
     (None = todas, comportamento validado). O filtro NAO altera nenhum
     calculo: as mesmas funcoes avaliam as mesmas linhas; familias fora
     do filtro simplesmente nao sao avaliadas nesta varredura.
+
+    `pressao=True` (opt-in, ETAPA 3) anexa ao candidato as janelas de
+    pressao temporal 5/10/15 min (EXPERIMENTAL / A CALIBRAR) lidas da
+    serie temporal imutavel (src/live_pressure) quando existirem. NAO
+    altera probabilidades, confianca, edge, Poisson, blend_rate ou
+    regras de aprovacao - e info auditavel apenas. Default False
+    preserva o comportamento validado (nenhum acesso a DB extra).
     """
     candidato = Candidato(snapshot=snapshot)
     snap = snapshot
@@ -1285,6 +1299,22 @@ def deep_dive(
 
     # anexa odds reais as linhas de total correspondentes
     _anexar_odd_real(candidato.avaliacoes, candidato)
+
+    # ETAPA 3 (opt-in): janelas de pressao temporal 5/10/15 min como
+    # info EXPERIMENTAL / A CALIBRAR. Le a serie temporal imutavel do
+    # fixture (db_path do cache live, monkeypatchavel em testes); se
+    # nao houver historico, todas as janelas vem NAO AVALIAVEIS. NAO
+    # toca nenhum calculo de aprovacao - e atributo auditavel apenas.
+    if pressao:
+        try:
+            import src.live as _live_mod
+            from src.live_pressure import query_pressure
+            candidato.pressao = query_pressure(
+                snap.fixture_id, db_path=_live_mod.DB_PATH
+            )
+        except Exception:
+            candidato.pressao = []
+
     return candidato
 
 

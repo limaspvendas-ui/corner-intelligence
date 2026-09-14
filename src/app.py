@@ -14,6 +14,8 @@ Uso:
     python -m src.app aovivodados "Flamengo x Palmeiras" [--atualizar]  (ETAPA 2)
     python -m src.app aovivoop                            (ETAPA 2.2: ha oportunidade ao vivo agora?)
     python -m src.app aovivoanalise "Flamengo x Palmeiras"  (ETAPA 2.2)
+    python -m src.app aovivocoleta "Flamengo x Palmeiras" [--intervalo 60] [--max-iter N]  (ETAPA 3: serie temporal imutavel)
+    python -m src.app aovivopressao "Flamengo x Palmeiras"  (ETAPA 3: pressao 5/10/15 min, EXPERIMENTAL)
     python -m src.app recomendacoes [--data DD/MM/YYYY] [--fixture ID] [--tipo live|prejogo]
     python -m src.app recomendacao ID
     python -m src.app recomendacaoresultado ID --resultado GANHA --placar-final "2-1" [--stats JSON] [--nota "..."]
@@ -485,6 +487,47 @@ def cmd_aovivoanalise(args: argparse.Namespace) -> str:
     return format_live_game_opportunities(candidato)
 
 
+def cmd_aovivocoleta(args: argparse.Namespace) -> str:
+    """ETAPA 3: coleta automatica de snapshots LIVE a cada ~60s ate a
+    partida encerrar ou o operador interromper (Ctrl+C). Cada coleta e
+    um fato temporal imutavel (serie temporal). Apenas [FATO]/[CALCULO];
+    sem interpretacao. Nao cria servidor web; respeita a CLI atual."""
+    from src.live import find_live_fixture_id
+    from src.live_pressure import collect_live_series
+
+    fixture_id = find_live_fixture_id(args.client, args.espec)
+    res = collect_live_series(
+        args.client, fixture_id, interval=args.intervalo,
+        max_iterations=args.max_iter,
+    )
+    motivo_txt = {
+        "partida_encerrada": "partida encerrada (status FT/AET/PEN)",
+        "interrompido_operador": "interrompido pelo operador (Ctrl+C)",
+        "limite_iteracoes": "limite de iteracoes alcancado",
+    }.get(res["motivo"], res["motivo"])
+    return (
+        f"[FATO] coleta temporal encerrada: {res['coletas']} snapshot(s) "
+        f"gravados para o fixture {res['fixture_id']} "
+        f"(intervalo {res['intervalo']}s). Motivo: {motivo_txt}. "
+        "Serie imutavel preservada no historico "
+        "(live_snapshot_history)."
+    )
+
+
+def cmd_aovivopressao(args: argparse.Namespace) -> str:
+    """ETAPA 3: consulta as janelas de PRESSAO 5/10/15 min do historico
+    temporal do fixture. Dados objetivos (deltas, taxas, direcao) +
+    status EXPERIMENTAL / A CALIBRAR. Sem threshold BAIXA/MODERADA/ALTA,
+    sem palpite, sem forcar aposta."""
+    from src.live import LiveSnapshotStore, find_live_fixture_id
+    from src.live_pressure import format_pressure_windows, query_pressure
+
+    fixture_id = find_live_fixture_id(args.client, args.espec)
+    windows = query_pressure(fixture_id)
+    snap = LiveSnapshotStore().get(fixture_id)
+    return format_pressure_windows(windows, snap=snap)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="corner-intelligence",
@@ -597,6 +640,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("espec", help='"Time A x Time B" ou ID da partida')
     p.set_defaults(fn=cmd_aovivoanalise)
+
+    p = sub.add_parser(
+        "aovivocoleta",
+        help="ETAPA 3: coleta automatica de snapshots LIVE a cada ~60s "
+             "(serie temporal imutavel). Ctrl+C interrompe sem corromper "
+             "o banco; para sozinho quando a partida encerra.",
+    )
+    p.add_argument("espec", help='"Time A x Time B" ou ID da partida')
+    p.add_argument("--intervalo", type=int, default=60,
+                   help="intervalo entre coletas em segundos (padrao 60)")
+    p.add_argument("--max-iter", type=int, default=None,
+                   help="limite de coletas (producao: sem limite; testes "
+                        "usam valor baixo para nao esperar 60s reais)")
+    p.set_defaults(fn=cmd_aovivocoleta)
+
+    p = sub.add_parser(
+        "aovivopressao",
+        help="ETAPA 3: janelas de pressao temporal 5/10/15 min "
+             "(EXPERIMENTAL / A CALIBRAR) do historico do fixture",
+    )
+    p.add_argument("espec", help='"Time A x Time B" ou ID da partida')
+    p.set_defaults(fn=cmd_aovivopressao)
 
     p = sub.add_parser(
         "recomendacoes",

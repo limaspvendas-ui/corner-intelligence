@@ -392,6 +392,24 @@ class LiveSnapshotStore:
             return None
         return LiveSnapshot.from_dict(json.loads(row[0]))
 
+    def _raw_row(
+        self, fixture_id: int
+    ) -> tuple[int, str, float] | None:
+        """Linha bruta (fixture_id, snapshot_json, updated_at_epoch) do
+        cache do ultimo snapshot, ou None. Expoe o epoch REAL da coleta
+        (updated_at) para que a serie temporal (src/live_pressure) possa
+        incorpora-lo como primeiro registro historico SEM INVENTAR
+        timestamp. Nao altera o comportamento de get/save."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT fixture_id, snapshot, updated_at "
+                "FROM live_snapshots WHERE fixture_id = ?",
+                (fixture_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return int(row[0]), str(row[1]), float(row[2])
+
     def save(self, snapshot: LiveSnapshot) -> None:
         import time
 
