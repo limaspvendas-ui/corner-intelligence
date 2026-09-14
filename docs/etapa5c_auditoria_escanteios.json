@@ -1,0 +1,1173 @@
+{
+  "run_id": "bt-20260913224716-PRE_GAME",
+  "cutoff": "2026-05-10T18:30:00-03:00",
+  "reproducao": {
+    "anterior": {
+      "entrar": 464,
+      "ganhas": 428,
+      "perdidas": 33,
+      "devolvidas": 0,
+      "nao_avaliavel": 3,
+      "hit_excl_na": 0.9284,
+      "prob_media_entrar": 0.9308,
+      "brier": 0.066,
+      "gap_obs_pred": -0.0023,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "posterior": {
+      "entrar": 429,
+      "ganhas": 369,
+      "perdidas": 54,
+      "devolvidas": 0,
+      "nao_avaliavel": 6,
+      "hit_excl_na": 0.8723,
+      "prob_media_entrar": 0.9266,
+      "brier": 0.1138,
+      "gap_obs_pred": -0.0542,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_mes": {
+    "2026-02": {
+      "entrar": 52,
+      "ganhas": 48,
+      "perdidas": 4,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9231,
+      "prob_media_entrar": 0.9359,
+      "brier": 0.0697,
+      "gap_obs_pred": -0.0129,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-03": {
+      "entrar": 117,
+      "ganhas": 106,
+      "perdidas": 10,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9138,
+      "prob_media_entrar": 0.9335,
+      "brier": 0.0782,
+      "gap_obs_pred": -0.0197,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-04": {
+      "entrar": 202,
+      "ganhas": 188,
+      "perdidas": 13,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9353,
+      "prob_media_entrar": 0.9297,
+      "brier": 0.061,
+      "gap_obs_pred": 0.0056,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-05": {
+      "entrar": 218,
+      "ganhas": 190,
+      "perdidas": 27,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.8756,
+      "prob_media_entrar": 0.9272,
+      "brier": 0.1106,
+      "gap_obs_pred": -0.0516,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-06": {
+      "entrar": 17,
+      "ganhas": 14,
+      "perdidas": 3,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8235,
+      "prob_media_entrar": 0.9166,
+      "brier": 0.155,
+      "gap_obs_pred": -0.0931,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "2026-07": {
+      "entrar": 87,
+      "ganhas": 78,
+      "perdidas": 7,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9176,
+      "prob_media_entrar": 0.9243,
+      "brier": 0.0749,
+      "gap_obs_pred": -0.0067,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-08": {
+      "entrar": 165,
+      "ganhas": 144,
+      "perdidas": 17,
+      "devolvidas": 0,
+      "nao_avaliavel": 4,
+      "hit_excl_na": 0.8944,
+      "prob_media_entrar": 0.9277,
+      "brier": 0.0959,
+      "gap_obs_pred": -0.0333,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-09": {
+      "entrar": 35,
+      "ganhas": 29,
+      "perdidas": 6,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8286,
+      "prob_media_entrar": 0.9279,
+      "brier": 0.1484,
+      "gap_obs_pred": -0.0993,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_mes_anterior": {
+    "2026-02": {
+      "entrar": 52,
+      "ganhas": 48,
+      "perdidas": 4,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9231,
+      "prob_media_entrar": 0.9359,
+      "brier": 0.0697,
+      "gap_obs_pred": -0.0129,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-03": {
+      "entrar": 117,
+      "ganhas": 106,
+      "perdidas": 10,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9138,
+      "prob_media_entrar": 0.9335,
+      "brier": 0.0782,
+      "gap_obs_pred": -0.0197,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-04": {
+      "entrar": 202,
+      "ganhas": 188,
+      "perdidas": 13,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9353,
+      "prob_media_entrar": 0.9297,
+      "brier": 0.061,
+      "gap_obs_pred": 0.0056,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-05": {
+      "entrar": 93,
+      "ganhas": 86,
+      "perdidas": 6,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9348,
+      "prob_media_entrar": 0.9266,
+      "brier": 0.0596,
+      "gap_obs_pred": 0.0082,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_mes_posterior": {
+    "2026-05": {
+      "entrar": 125,
+      "ganhas": 104,
+      "perdidas": 21,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.832,
+      "prob_media_entrar": 0.9276,
+      "brier": 0.148,
+      "gap_obs_pred": -0.0956,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-06": {
+      "entrar": 17,
+      "ganhas": 14,
+      "perdidas": 3,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8235,
+      "prob_media_entrar": 0.9166,
+      "brier": 0.155,
+      "gap_obs_pred": -0.0931,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "2026-07": {
+      "entrar": 87,
+      "ganhas": 78,
+      "perdidas": 7,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9176,
+      "prob_media_entrar": 0.9243,
+      "brier": 0.0749,
+      "gap_obs_pred": -0.0067,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-08": {
+      "entrar": 165,
+      "ganhas": 144,
+      "perdidas": 17,
+      "devolvidas": 0,
+      "nao_avaliavel": 4,
+      "hit_excl_na": 0.8944,
+      "prob_media_entrar": 0.9277,
+      "brier": 0.0959,
+      "gap_obs_pred": -0.0333,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-09": {
+      "entrar": 35,
+      "ganhas": 29,
+      "perdidas": 6,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8286,
+      "prob_media_entrar": 0.9279,
+      "brier": 0.1484,
+      "gap_obs_pred": -0.0993,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_trimestre": {
+    "2026-Q1": {
+      "entrar": 169,
+      "ganhas": 154,
+      "perdidas": 14,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9167,
+      "prob_media_entrar": 0.9343,
+      "brier": 0.0756,
+      "gap_obs_pred": -0.0176,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-Q2": {
+      "entrar": 437,
+      "ganhas": 392,
+      "perdidas": 43,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9011,
+      "prob_media_entrar": 0.9279,
+      "brier": 0.0894,
+      "gap_obs_pred": -0.0268,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "2026-Q3": {
+      "entrar": 287,
+      "ganhas": 251,
+      "perdidas": 30,
+      "devolvidas": 0,
+      "nao_avaliavel": 6,
+      "hit_excl_na": 0.8932,
+      "prob_media_entrar": 0.9267,
+      "brier": 0.0961,
+      "gap_obs_pred": -0.0335,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_bloco_walkforward": {
+    "bloco_1": {
+      "entrar": 94,
+      "ganhas": 87,
+      "perdidas": 7,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9255,
+      "prob_media_entrar": 0.9344,
+      "brier": 0.0676,
+      "gap_obs_pred": -0.0088,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "bloco_2": {
+      "entrar": 159,
+      "ganhas": 147,
+      "perdidas": 11,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9304,
+      "prob_media_entrar": 0.9328,
+      "brier": 0.0649,
+      "gap_obs_pred": -0.0024,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "bloco_3": {
+      "entrar": 206,
+      "ganhas": 189,
+      "perdidas": 15,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9265,
+      "prob_media_entrar": 0.9277,
+      "brier": 0.0676,
+      "gap_obs_pred": -0.0013,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "bloco_4": {
+      "entrar": 200,
+      "ganhas": 170,
+      "perdidas": 28,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.8586,
+      "prob_media_entrar": 0.9249,
+      "brier": 0.1254,
+      "gap_obs_pred": -0.0663,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "bloco_5": {
+      "entrar": 122,
+      "ganhas": 107,
+      "perdidas": 12,
+      "devolvidas": 0,
+      "nao_avaliavel": 3,
+      "hit_excl_na": 0.8992,
+      "prob_media_entrar": 0.9283,
+      "brier": 0.0915,
+      "gap_obs_pred": -0.0292,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "bloco_6": {
+      "entrar": 112,
+      "ganhas": 97,
+      "perdidas": 14,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.8739,
+      "prob_media_entrar": 0.9274,
+      "brier": 0.1123,
+      "gap_obs_pred": -0.0535,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_liga": {
+    "128": {
+      "league_name": "Liga Profesional Argentina",
+      "n_anterior": 149,
+      "n_posterior": 82,
+      "hit_anterior": 0.9128,
+      "hit_posterior": 0.8875,
+      "gap_anterior": -0.0238,
+      "gap_posterior": -0.041,
+      "prob_anterior": 0.9366,
+      "prob_posterior": 0.9285
+    },
+    "11": {
+      "league_name": "CONMEBOL Sudamericana",
+      "n_anterior": 22,
+      "n_posterior": 41,
+      "hit_anterior": 0.9091,
+      "hit_posterior": 0.878,
+      "gap_anterior": -0.0194,
+      "gap_posterior": -0.0483,
+      "prob_anterior": 0.9285,
+      "prob_posterior": 0.9263
+    },
+    "13": {
+      "league_name": "CONMEBOL Libertadores",
+      "n_anterior": 33,
+      "n_posterior": 28,
+      "hit_anterior": 0.9091,
+      "hit_posterior": 0.8929,
+      "gap_anterior": -0.0189,
+      "gap_posterior": -0.0376,
+      "prob_anterior": 0.928,
+      "prob_posterior": 0.9305
+    },
+    "281": {
+      "league_name": "Primera División",
+      "n_anterior": 39,
+      "n_posterior": 35,
+      "hit_anterior": 0.8974,
+      "hit_posterior": 0.9143,
+      "gap_anterior": -0.0354,
+      "gap_posterior": -0.0255,
+      "prob_anterior": 0.9329,
+      "prob_posterior": 0.9398
+    },
+    "71": {
+      "league_name": "Serie A",
+      "n_anterior": 29,
+      "n_posterior": 14,
+      "hit_anterior": 0.931,
+      "hit_posterior": 0.9286,
+      "gap_anterior": 0.0118,
+      "gap_posterior": 0.0078,
+      "prob_anterior": 0.9192,
+      "prob_posterior": 0.9207
+    },
+    "72": {
+      "league_name": "Serie B",
+      "n_anterior": 29,
+      "n_posterior": 70,
+      "hit_anterior": 0.9259,
+      "hit_posterior": 0.8143,
+      "gap_anterior": 0.0119,
+      "gap_posterior": -0.1014,
+      "prob_anterior": 0.914,
+      "prob_posterior": 0.9157
+    },
+    "204": {
+      "league_name": "1. Lig",
+      "n_anterior": 1,
+      "n_posterior": 16,
+      "hit_anterior": 1.0,
+      "hit_posterior": 1.0,
+      "gap_anterior": 0.0648,
+      "gap_posterior": 0.0687,
+      "prob_anterior": 0.9352,
+      "prob_posterior": 0.9313
+    },
+    "239": {
+      "league_name": "Primera A",
+      "n_anterior": 84,
+      "n_posterior": 33,
+      "hit_anterior": 0.9286,
+      "hit_posterior": 0.8438,
+      "gap_anterior": -0.0062,
+      "gap_posterior": -0.0872,
+      "prob_anterior": 0.9348,
+      "prob_posterior": 0.931
+    },
+    "242": {
+      "league_name": "Liga Pro",
+      "n_anterior": 51,
+      "n_posterior": 43,
+      "hit_anterior": 1.0,
+      "hit_posterior": 0.9024,
+      "gap_anterior": 0.0737,
+      "gap_posterior": -0.0249,
+      "prob_anterior": 0.9263,
+      "prob_posterior": 0.9274
+    },
+    "253": {
+      "league_name": "Major League Soccer",
+      "n_anterior": 13,
+      "n_posterior": 25,
+      "hit_anterior": 1.0,
+      "hit_posterior": 0.8333,
+      "gap_anterior": 0.076,
+      "gap_posterior": -0.0861,
+      "prob_anterior": 0.924,
+      "prob_posterior": 0.9194
+    }
+  },
+  "mix_anterior": {
+    "128": {
+      "league_name": "Liga Profesional Argentina",
+      "n": 149,
+      "share": 0.3211
+    },
+    "239": {
+      "league_name": "Primera A",
+      "n": 84,
+      "share": 0.181
+    },
+    "242": {
+      "league_name": "Liga Pro",
+      "n": 51,
+      "share": 0.1099
+    },
+    "281": {
+      "league_name": "Primera División",
+      "n": 39,
+      "share": 0.0841
+    },
+    "13": {
+      "league_name": "CONMEBOL Libertadores",
+      "n": 33,
+      "share": 0.0711
+    },
+    "71": {
+      "league_name": "Serie A",
+      "n": 29,
+      "share": 0.0625
+    },
+    "72": {
+      "league_name": "Serie B",
+      "n": 29,
+      "share": 0.0625
+    },
+    "11": {
+      "league_name": "CONMEBOL Sudamericana",
+      "n": 22,
+      "share": 0.0474
+    },
+    "253": {
+      "league_name": "Major League Soccer",
+      "n": 13,
+      "share": 0.028
+    },
+    "135": {
+      "league_name": "Serie A",
+      "n": 4,
+      "share": 0.0086
+    },
+    "94": {
+      "league_name": "Primeira Liga",
+      "n": 3,
+      "share": 0.0065
+    },
+    "113": {
+      "league_name": "Allsvenskan",
+      "n": 2,
+      "share": 0.0043
+    },
+    "475": {
+      "league_name": "Paulista - A1",
+      "n": 1,
+      "share": 0.0022
+    },
+    "204": {
+      "league_name": "1. Lig",
+      "n": 1,
+      "share": 0.0022
+    },
+    "89": {
+      "league_name": "Eerste Divisie",
+      "n": 1,
+      "share": 0.0022
+    },
+    "203": {
+      "league_name": "Süper Lig",
+      "n": 1,
+      "share": 0.0022
+    },
+    "88": {
+      "league_name": "Eredivisie",
+      "n": 1,
+      "share": 0.0022
+    },
+    "140": {
+      "league_name": "La Liga",
+      "n": 1,
+      "share": 0.0022
+    }
+  },
+  "mix_posterior": {
+    "128": {
+      "league_name": "Liga Profesional Argentina",
+      "n": 82,
+      "share": 0.1911
+    },
+    "72": {
+      "league_name": "Serie B",
+      "n": 70,
+      "share": 0.1632
+    },
+    "242": {
+      "league_name": "Liga Pro",
+      "n": 43,
+      "share": 0.1002
+    },
+    "11": {
+      "league_name": "CONMEBOL Sudamericana",
+      "n": 41,
+      "share": 0.0956
+    },
+    "281": {
+      "league_name": "Primera División",
+      "n": 35,
+      "share": 0.0816
+    },
+    "239": {
+      "league_name": "Primera A",
+      "n": 33,
+      "share": 0.0769
+    },
+    "13": {
+      "league_name": "CONMEBOL Libertadores",
+      "n": 28,
+      "share": 0.0653
+    },
+    "253": {
+      "league_name": "Major League Soccer",
+      "n": 25,
+      "share": 0.0583
+    },
+    "204": {
+      "league_name": "1. Lig",
+      "n": 16,
+      "share": 0.0373
+    },
+    "71": {
+      "league_name": "Serie A",
+      "n": 14,
+      "share": 0.0326
+    },
+    "94": {
+      "league_name": "Primeira Liga",
+      "n": 7,
+      "share": 0.0163
+    },
+    "135": {
+      "league_name": "Serie A",
+      "n": 6,
+      "share": 0.014
+    },
+    "113": {
+      "league_name": "Allsvenskan",
+      "n": 5,
+      "share": 0.0117
+    },
+    "772": {
+      "league_name": "Leagues Cup",
+      "n": 5,
+      "share": 0.0117
+    },
+    "203": {
+      "league_name": "Süper Lig",
+      "n": 4,
+      "share": 0.0093
+    },
+    "140": {
+      "league_name": "La Liga",
+      "n": 4,
+      "share": 0.0093
+    },
+    "262": {
+      "league_name": "Liga MX",
+      "n": 3,
+      "share": 0.007
+    },
+    "89": {
+      "league_name": "Eerste Divisie",
+      "n": 3,
+      "share": 0.007
+    },
+    "61": {
+      "league_name": "Ligue 1",
+      "n": 2,
+      "share": 0.0047
+    },
+    "78": {
+      "league_name": "Bundesliga",
+      "n": 1,
+      "share": 0.0023
+    },
+    "88": {
+      "league_name": "Eredivisie",
+      "n": 1,
+      "share": 0.0023
+    },
+    "106": {
+      "league_name": "Ekstraklasa",
+      "n": 1,
+      "share": 0.0023
+    }
+  },
+  "por_linha_anterior": {
+    "Over 2.5": {
+      "entrar": 6,
+      "ganhas": 6,
+      "perdidas": 0,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 1.0,
+      "prob_media_entrar": 0.9628,
+      "brier": 0.0014,
+      "gap_obs_pred": 0.0372,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    },
+    "Over 3.5": {
+      "entrar": 81,
+      "ganhas": 78,
+      "perdidas": 3,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.963,
+      "prob_media_entrar": 0.95,
+      "brier": 0.0363,
+      "gap_obs_pred": 0.013,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 4.5": {
+      "entrar": 158,
+      "ganhas": 144,
+      "perdidas": 14,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9114,
+      "prob_media_entrar": 0.9333,
+      "brier": 0.0809,
+      "gap_obs_pred": -0.0219,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 5.5": {
+      "entrar": 66,
+      "ganhas": 65,
+      "perdidas": 1,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9848,
+      "prob_media_entrar": 0.9225,
+      "brier": 0.0188,
+      "gap_obs_pred": 0.0623,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 6.5": {
+      "entrar": 15,
+      "ganhas": 12,
+      "perdidas": 1,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9231,
+      "prob_media_entrar": 0.9041,
+      "brier": 0.0713,
+      "gap_obs_pred": 0.019,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "Over 7.5": {
+      "entrar": 1,
+      "ganhas": 0,
+      "perdidas": 1,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.0,
+      "prob_media_entrar": 0.8925,
+      "brier": 0.7966,
+      "gap_obs_pred": -0.8925,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    },
+    "Under 10.5": {
+      "entrar": 2,
+      "ganhas": 2,
+      "perdidas": 0,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 1.0,
+      "prob_media_entrar": 0.9233,
+      "brier": 0.0059,
+      "gap_obs_pred": 0.0767,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    },
+    "Under 11.5": {
+      "entrar": 9,
+      "ganhas": 8,
+      "perdidas": 1,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8889,
+      "prob_media_entrar": 0.9341,
+      "brier": 0.0981,
+      "gap_obs_pred": -0.0453,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    },
+    "Under 12.5": {
+      "entrar": 55,
+      "ganhas": 47,
+      "perdidas": 7,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.8704,
+      "prob_media_entrar": 0.9277,
+      "brier": 0.1154,
+      "gap_obs_pred": -0.0573,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Under 13.5": {
+      "entrar": 54,
+      "ganhas": 51,
+      "perdidas": 3,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9444,
+      "prob_media_entrar": 0.9186,
+      "brier": 0.0526,
+      "gap_obs_pred": 0.0258,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Under 14.5": {
+      "entrar": 15,
+      "ganhas": 13,
+      "perdidas": 2,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8667,
+      "prob_media_entrar": 0.907,
+      "brier": 0.1167,
+      "gap_obs_pred": -0.0404,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "Under 15.5": {
+      "entrar": 2,
+      "ganhas": 2,
+      "perdidas": 0,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 1.0,
+      "prob_media_entrar": 0.8967,
+      "brier": 0.0107,
+      "gap_obs_pred": 0.1033,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    }
+  },
+  "por_linha_posterior": {
+    "Over 3.5": {
+      "entrar": 30,
+      "ganhas": 28,
+      "perdidas": 2,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9333,
+      "prob_media_entrar": 0.9493,
+      "brier": 0.0634,
+      "gap_obs_pred": -0.016,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 4.5": {
+      "entrar": 161,
+      "ganhas": 140,
+      "perdidas": 16,
+      "devolvidas": 0,
+      "nao_avaliavel": 5,
+      "hit_excl_na": 0.8974,
+      "prob_media_entrar": 0.9338,
+      "brier": 0.0938,
+      "gap_obs_pred": -0.0364,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 5.5": {
+      "entrar": 90,
+      "ganhas": 79,
+      "perdidas": 11,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8778,
+      "prob_media_entrar": 0.9219,
+      "brier": 0.1084,
+      "gap_obs_pred": -0.0441,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Over 6.5": {
+      "entrar": 27,
+      "ganhas": 23,
+      "perdidas": 4,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8519,
+      "prob_media_entrar": 0.9071,
+      "brier": 0.1295,
+      "gap_obs_pred": -0.0552,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "Under 11.5": {
+      "entrar": 3,
+      "ganhas": 3,
+      "perdidas": 0,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 1.0,
+      "prob_media_entrar": 0.9388,
+      "brier": 0.0038,
+      "gap_obs_pred": 0.0612,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    },
+    "Under 12.5": {
+      "entrar": 30,
+      "ganhas": 24,
+      "perdidas": 6,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8,
+      "prob_media_entrar": 0.9275,
+      "brier": 0.176,
+      "gap_obs_pred": -0.1275,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Under 13.5": {
+      "entrar": 66,
+      "ganhas": 57,
+      "perdidas": 9,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8636,
+      "prob_media_entrar": 0.9182,
+      "brier": 0.1216,
+      "gap_obs_pred": -0.0546,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "Under 14.5": {
+      "entrar": 21,
+      "ganhas": 15,
+      "perdidas": 5,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.75,
+      "prob_media_entrar": 0.909,
+      "brier": 0.2118,
+      "gap_obs_pred": -0.159,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "Under 15.5": {
+      "entrar": 1,
+      "ganhas": 0,
+      "perdidas": 1,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.0,
+      "prob_media_entrar": 0.8985,
+      "brier": 0.8073,
+      "gap_obs_pred": -0.8985,
+      "maturidade": "AMOSTRA INSUFICIENTE"
+    }
+  },
+  "over_vs_under_anterior": {
+    "over": {
+      "entrar": 327,
+      "ganhas": 305,
+      "perdidas": 20,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9385,
+      "prob_media_entrar": 0.9345,
+      "brier": 0.0575,
+      "gap_obs_pred": 0.0039,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "under": {
+      "entrar": 137,
+      "ganhas": 123,
+      "perdidas": 13,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.9044,
+      "prob_media_entrar": 0.9217,
+      "brier": 0.0863,
+      "gap_obs_pred": -0.0173,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "over_vs_under_posterior": {
+    "over": {
+      "entrar": 308,
+      "ganhas": 270,
+      "perdidas": 33,
+      "devolvidas": 0,
+      "nao_avaliavel": 5,
+      "hit_excl_na": 0.8911,
+      "prob_media_entrar": 0.9294,
+      "brier": 0.0983,
+      "gap_obs_pred": -0.0383,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "under": {
+      "entrar": 121,
+      "ganhas": 99,
+      "perdidas": 21,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.825,
+      "prob_media_entrar": 0.9193,
+      "brier": 0.153,
+      "gap_obs_pred": -0.0943,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_faixa_prob_anterior": {
+    "80-90": {
+      "entrar": 11,
+      "ganhas": 8,
+      "perdidas": 2,
+      "devolvidas": 0,
+      "nao_avaliavel": 1,
+      "hit_excl_na": 0.8,
+      "prob_media_entrar": 0.8954,
+      "brier": 0.1686,
+      "gap_obs_pred": -0.0954,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "90-95": {
+      "entrar": 397,
+      "ganhas": 367,
+      "perdidas": 28,
+      "devolvidas": 0,
+      "nao_avaliavel": 2,
+      "hit_excl_na": 0.9291,
+      "prob_media_entrar": 0.9282,
+      "brier": 0.0656,
+      "gap_obs_pred": 0.0009,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "95-97": {
+      "entrar": 56,
+      "ganhas": 53,
+      "perdidas": 3,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.9464,
+      "prob_media_entrar": 0.955,
+      "brier": 0.0509,
+      "gap_obs_pred": -0.0085,
+      "maturidade": "AMOSTRA MADURA"
+    }
+  },
+  "por_faixa_prob_posterior": {
+    "80-90": {
+      "entrar": 10,
+      "ganhas": 8,
+      "perdidas": 2,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8,
+      "prob_media_entrar": 0.8975,
+      "brier": 0.1699,
+      "gap_obs_pred": -0.0975,
+      "maturidade": "EM OBSERVAÇÃO"
+    },
+    "90-95": {
+      "entrar": 401,
+      "ganhas": 345,
+      "perdidas": 50,
+      "devolvidas": 0,
+      "nao_avaliavel": 6,
+      "hit_excl_na": 0.8734,
+      "prob_media_entrar": 0.9261,
+      "brier": 0.1129,
+      "gap_obs_pred": -0.0526,
+      "maturidade": "AMOSTRA MADURA"
+    },
+    "95-97": {
+      "entrar": 18,
+      "ganhas": 16,
+      "perdidas": 2,
+      "devolvidas": 0,
+      "nao_avaliavel": 0,
+      "hit_excl_na": 0.8889,
+      "prob_media_entrar": 0.954,
+      "brier": 0.1034,
+      "gap_obs_pred": -0.0651,
+      "maturidade": "EM OBSERVAÇÃO"
+    }
+  },
+  "maturidade_anterior": {
+    "n_home": {
+      "min": 0,
+      "med": 10.0,
+      "max": 20,
+      "mean": 10.36
+    },
+    "n_away": {
+      "min": 0,
+      "med": 10.0,
+      "max": 20,
+      "mean": 10.7
+    },
+    "bench_validas": {
+      "min": 10,
+      "med": 93.5,
+      "max": 243,
+      "mean": 105.92
+    },
+    "sem_stats_home": {
+      "min": 0,
+      "med": 1.0,
+      "max": 15,
+      "mean": 1.94
+    },
+    "sem_stats_away": {
+      "min": 0,
+      "med": 1.0,
+      "max": 15,
+      "mean": 1.92
+    },
+    "h2h_n": {
+      "min": 0,
+      "med": 0.0,
+      "max": 1,
+      "mean": 0.05
+    },
+    "n_amostra_curta": 8,
+    "n_sem_stats_algum": 324
+  },
+  "maturidade_posterior": {
+    "n_home": {
+      "min": 4,
+      "med": 18,
+      "max": 20,
+      "mean": 15.99
+    },
+    "n_away": {
+      "min": 0,
+      "med": 17,
+      "max": 20,
+      "mean": 15.66
+    },
+    "bench_validas": {
+      "min": 5,
+      "med": 157,
+      "max": 363,
+      "mean": 172.95
+    },
+    "sem_stats_home": {
+      "min": 0,
+      "med": 1,
+      "max": 16,
+      "mean": 2.08
+    },
+    "sem_stats_away": {
+      "min": 0,
+      "med": 2,
+      "max": 16,
+      "mean": 2.23
+    },
+    "h2h_n": {
+      "min": 0,
+      "med": 1,
+      "max": 3,
+      "mean": 0.68
+    },
+    "n_amostra_curta": 1,
+    "n_sem_stats_algum": 377
+  },
+  "drift": {
+    "anterior": {
+      "n": 461,
+      "media_total": 8.97,
+      "mediana_total": 9.0,
+      "stdev_total": 3.141,
+      "min": 2.0,
+      "max": 21.0,
+      "pct_over": 0.7047,
+      "pct_under": 0.2953
+    },
+    "posterior": {
+      "n": 423,
+      "media_total": 9.366,
+      "mediana_total": 9.0,
+      "stdev_total": 3.595,
+      "min": 1.0,
+      "max": 23.0,
+      "pct_over": 0.7179,
+      "pct_under": 0.2821
+    }
+  },
+  "concentracao_fixture": {
+    "fixtures_com_entrar": 886,
+    "fx_com_1_entrar": 879,
+    "fx_com_2_entrar": 7,
+    "fx_com_3plus_entrar": 0,
+    "fx_com_alguma_perda": 87,
+    "dist_perdas_por_fixture": {
+      "0": 799,
+      "1": 87
+    },
+    "max_perdas_num_fixture": 1,
+    "total_perdas": 87
+  },
+  "settlement_revalidate": {
+    "total": 893,
+    "mismatches": 0,
+    "loss_mismatches": 0,
+    "settlement_ok": true
+  }
+}
