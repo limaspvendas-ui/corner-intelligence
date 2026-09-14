@@ -1,0 +1,476 @@
+{
+  "etapa": "5F-D",
+  "timestamp": 1789399206.2626073,
+  "gate_aberto": false,
+  "modo_seguro_ativo": true,
+  "credenciais": {
+    "api_football": {
+      "credencial_configurada": true,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "the_odds_api": {
+      "credencial_configurada": false,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "five_dollar_football": {
+      "credencial_configurada": false,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "sportmonks": {
+      "credencial_configurada": false,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "apifootball_com": {
+      "credencial_configurada": false,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "football_data_org": {
+      "credencial_configurada": false,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    },
+    "statsbomb_open": {
+      "credencial_configurada": true,
+      "gate_aberto": false,
+      "chamada_real_autorizada": false
+    }
+  },
+  "banco_snapshots": {
+    "db_path": "C:\\CornerIntelligence\\data\\corner_intelligence.db",
+    "tabela": "odds_snapshot_history",
+    "total": 317951,
+    "por_provider": {
+      "api_football": 317951
+    },
+    "por_coleta_tipo": {
+      "live": 7053,
+      "pre_match": 310898
+    },
+    "por_status": {
+      "INVALID": 1553,
+      "OK": 39144,
+      "SUSPENDED": 1514,
+      "UNMAPPED": 275740
+    },
+    "hashs_distintos": 317951,
+    "provider_null": 0,
+    "user_version": 2,
+    "integrity_check": "ok"
+  },
+  "matriz_cobertura": {
+    "api_football": {
+      "fixtures": "OK",
+      "competitions": "OK",
+      "seasons": "OK",
+      "teams": "OK",
+      "score_ht": "LIMITADO_PELO_PLANO",
+      "score_ft": "OK",
+      "kickoff": "OK",
+      "status": "OK",
+      "corners": "OK",
+      "shots": "OK",
+      "shots_on_target": "OK",
+      "blocked_shots": "OK",
+      "possession": "OK",
+      "fouls": "OK",
+      "yellow_cards": "OK",
+      "red_cards": "OK",
+      "total_cards": "OK",
+      "goals": "OK",
+      "odds_pre_match": "OK",
+      "odds_live": "OK",
+      "odds_opening": "A_CONFIRMAR",
+      "odds_closing": "A_CONFIRMAR",
+      "over_under_corners": "OK",
+      "handicap_corners": "LIMITADO_PELO_PLANO",
+      "asian_corners": "LIMITADO_PELO_PLANO",
+      "over_under_goals": "OK",
+      "handicap_goals": "LIMITADO_PELO_PLANO",
+      "over_under_cards": "OK",
+      "events_timeline": "OK",
+      "lineups": "OK"
+    },
+    "the_odds_api": {
+      "fixtures": "SEM_CREDENCIAL",
+      "competitions": "SEM_CREDENCIAL",
+      "seasons": "SEM_CREDENCIAL",
+      "teams": "SEM_CREDENCIAL",
+      "score_ht": "SEM_CREDENCIAL",
+      "score_ft": "SEM_CREDENCIAL",
+      "kickoff": "SEM_CREDENCIAL",
+      "status": "SEM_CREDENCIAL",
+      "corners": "SEM_CREDENCIAL",
+      "shots": "SEM_CREDENCIAL",
+      "shots_on_target": "SEM_CREDENCIAL",
+      "blocked_shots": "SEM_CREDENCIAL",
+      "possession": "SEM_CREDENCIAL",
+      "fouls": "SEM_CREDENCIAL",
+      "yellow_cards": "SEM_CREDENCIAL",
+      "red_cards": "SEM_CREDENCIAL",
+      "total_cards": "SEM_CREDENCIAL",
+      "goals": "SEM_CREDENCIAL",
+      "odds_pre_match": "SEM_CREDENCIAL",
+      "odds_live": "SEM_CREDENCIAL",
+      "odds_opening": "SEM_CREDENCIAL",
+      "odds_closing": "SEM_CREDENCIAL",
+      "over_under_corners": "SEM_CREDENCIAL",
+      "handicap_corners": "SEM_CREDENCIAL",
+      "asian_corners": "SEM_CREDENCIAL",
+      "over_under_goals": "SEM_CREDENCIAL",
+      "handicap_goals": "SEM_CREDENCIAL",
+      "over_under_cards": "SEM_CREDENCIAL",
+      "events_timeline": "SEM_CREDENCIAL",
+      "lineups": "SEM_CREDENCIAL"
+    },
+    "five_dollar_football": {
+      "fixtures": "SEM_CREDENCIAL",
+      "competitions": "SEM_CREDENCIAL",
+      "seasons": "SEM_CREDENCIAL",
+      "teams": "SEM_CREDENCIAL",
+      "score_ht": "SEM_CREDENCIAL",
+      "score_ft": "SEM_CREDENCIAL",
+      "kickoff": "SEM_CREDENCIAL",
+      "status": "SEM_CREDENCIAL",
+      "corners": "SEM_CREDENCIAL",
+      "shots": "SEM_CREDENCIAL",
+      "shots_on_target": "SEM_CREDENCIAL",
+      "blocked_shots": "SEM_CREDENCIAL",
+      "possession": "SEM_CREDENCIAL",
+      "fouls": "SEM_CREDENCIAL",
+      "yellow_cards": "SEM_CREDENCIAL",
+      "red_cards": "SEM_CREDENCIAL",
+      "total_cards": "SEM_CREDENCIAL",
+      "goals": "SEM_CREDENCIAL",
+      "odds_pre_match": "SEM_CREDENCIAL",
+      "odds_live": "SEM_CREDENCIAL",
+      "odds_opening": "SEM_CREDENCIAL",
+      "odds_closing": "SEM_CREDENCIAL",
+      "over_under_corners": "SEM_CREDENCIAL",
+      "handicap_corners": "SEM_CREDENCIAL",
+      "asian_corners": "SEM_CREDENCIAL",
+      "over_under_goals": "SEM_CREDENCIAL",
+      "handicap_goals": "SEM_CREDENCIAL",
+      "over_under_cards": "SEM_CREDENCIAL",
+      "events_timeline": "SEM_CREDENCIAL",
+      "lineups": "SEM_CREDENCIAL"
+    },
+    "sportmonks": {
+      "fixtures": "SEM_CREDENCIAL",
+      "competitions": "SEM_CREDENCIAL",
+      "seasons": "SEM_CREDENCIAL",
+      "teams": "SEM_CREDENCIAL",
+      "score_ht": "SEM_CREDENCIAL",
+      "score_ft": "SEM_CREDENCIAL",
+      "kickoff": "SEM_CREDENCIAL",
+      "status": "SEM_CREDENCIAL",
+      "corners": "SEM_CREDENCIAL",
+      "shots": "SEM_CREDENCIAL",
+      "shots_on_target": "SEM_CREDENCIAL",
+      "blocked_shots": "SEM_CREDENCIAL",
+      "possession": "SEM_CREDENCIAL",
+      "fouls": "SEM_CREDENCIAL",
+      "yellow_cards": "SEM_CREDENCIAL",
+      "red_cards": "SEM_CREDENCIAL",
+      "total_cards": "SEM_CREDENCIAL",
+      "goals": "SEM_CREDENCIAL",
+      "odds_pre_match": "SEM_CREDENCIAL",
+      "odds_live": "SEM_CREDENCIAL",
+      "odds_opening": "SEM_CREDENCIAL",
+      "odds_closing": "SEM_CREDENCIAL",
+      "over_under_corners": "SEM_CREDENCIAL",
+      "handicap_corners": "SEM_CREDENCIAL",
+      "asian_corners": "SEM_CREDENCIAL",
+      "over_under_goals": "SEM_CREDENCIAL",
+      "handicap_goals": "SEM_CREDENCIAL",
+      "over_under_cards": "SEM_CREDENCIAL",
+      "events_timeline": "SEM_CREDENCIAL",
+      "lineups": "SEM_CREDENCIAL"
+    },
+    "apifootball_com": {
+      "fixtures": "SEM_CREDENCIAL",
+      "competitions": "SEM_CREDENCIAL",
+      "seasons": "SEM_CREDENCIAL",
+      "teams": "SEM_CREDENCIAL",
+      "score_ht": "SEM_CREDENCIAL",
+      "score_ft": "SEM_CREDENCIAL",
+      "kickoff": "SEM_CREDENCIAL",
+      "status": "SEM_CREDENCIAL",
+      "corners": "SEM_CREDENCIAL",
+      "shots": "SEM_CREDENCIAL",
+      "shots_on_target": "SEM_CREDENCIAL",
+      "blocked_shots": "SEM_CREDENCIAL",
+      "possession": "SEM_CREDENCIAL",
+      "fouls": "SEM_CREDENCIAL",
+      "yellow_cards": "SEM_CREDENCIAL",
+      "red_cards": "SEM_CREDENCIAL",
+      "total_cards": "SEM_CREDENCIAL",
+      "goals": "SEM_CREDENCIAL",
+      "odds_pre_match": "SEM_CREDENCIAL",
+      "odds_live": "SEM_CREDENCIAL",
+      "odds_opening": "SEM_CREDENCIAL",
+      "odds_closing": "SEM_CREDENCIAL",
+      "over_under_corners": "SEM_CREDENCIAL",
+      "handicap_corners": "SEM_CREDENCIAL",
+      "asian_corners": "SEM_CREDENCIAL",
+      "over_under_goals": "SEM_CREDENCIAL",
+      "handicap_goals": "SEM_CREDENCIAL",
+      "over_under_cards": "SEM_CREDENCIAL",
+      "events_timeline": "SEM_CREDENCIAL",
+      "lineups": "SEM_CREDENCIAL"
+    },
+    "football_data_org": {
+      "fixtures": "SEM_CREDENCIAL",
+      "competitions": "SEM_CREDENCIAL",
+      "seasons": "SEM_CREDENCIAL",
+      "teams": "SEM_CREDENCIAL",
+      "score_ht": "SEM_CREDENCIAL",
+      "score_ft": "SEM_CREDENCIAL",
+      "kickoff": "SEM_CREDENCIAL",
+      "status": "SEM_CREDENCIAL",
+      "corners": "SEM_CREDENCIAL",
+      "shots": "SEM_CREDENCIAL",
+      "shots_on_target": "SEM_CREDENCIAL",
+      "blocked_shots": "SEM_CREDENCIAL",
+      "possession": "SEM_CREDENCIAL",
+      "fouls": "SEM_CREDENCIAL",
+      "yellow_cards": "SEM_CREDENCIAL",
+      "red_cards": "SEM_CREDENCIAL",
+      "total_cards": "SEM_CREDENCIAL",
+      "goals": "SEM_CREDENCIAL",
+      "odds_pre_match": "SEM_CREDENCIAL",
+      "odds_live": "SEM_CREDENCIAL",
+      "odds_opening": "SEM_CREDENCIAL",
+      "odds_closing": "SEM_CREDENCIAL",
+      "over_under_corners": "SEM_CREDENCIAL",
+      "handicap_corners": "SEM_CREDENCIAL",
+      "asian_corners": "SEM_CREDENCIAL",
+      "over_under_goals": "SEM_CREDENCIAL",
+      "handicap_goals": "SEM_CREDENCIAL",
+      "over_under_cards": "SEM_CREDENCIAL",
+      "events_timeline": "SEM_CREDENCIAL",
+      "lineups": "SEM_CREDENCIAL"
+    },
+    "statsbomb_open": {
+      "fixtures": "OK",
+      "competitions": "OK",
+      "seasons": "OK",
+      "teams": "OK",
+      "score_ht": "OK",
+      "score_ft": "OK",
+      "kickoff": "OK",
+      "status": "OK",
+      "corners": "NAO_DISPONIVEL",
+      "shots": "OK",
+      "shots_on_target": "OK",
+      "blocked_shots": "NAO_DISPONIVEL",
+      "possession": "OK",
+      "fouls": "NAO_DISPONIVEL",
+      "yellow_cards": "NAO_DISPONIVEL",
+      "red_cards": "NAO_DISPONIVEL",
+      "total_cards": "NAO_DISPONIVEL",
+      "goals": "OK",
+      "odds_pre_match": "NAO_DISPONIVEL",
+      "odds_live": "NAO_DISPONIVEL",
+      "odds_opening": "NAO_DISPONIVEL",
+      "odds_closing": "NAO_DISPONIVEL",
+      "over_under_corners": "NAO_DISPONIVEL",
+      "handicap_corners": "NAO_DISPONIVEL",
+      "asian_corners": "NAO_DISPONIVEL",
+      "over_under_goals": "NAO_DISPONIVEL",
+      "handicap_goals": "NAO_DISPONIVEL",
+      "over_under_cards": "NAO_DISPONIVEL",
+      "events_timeline": "OK",
+      "lineups": "OK"
+    }
+  },
+  "matriz_confiabilidade": {
+    "corners": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "cache existente (api_football)",
+      "coverage": "VALIDADO(api_football) / SEM_CREDENCIAL(sportmonks)",
+      "status": "PARCIAL"
+    },
+    "goals": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "cache + open data",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "red_cards": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "Red Cards=null e limitacao estrutural (Etapa 5D)",
+      "coverage": "LIMITADO_PELO_PLANO",
+      "status": "NAO_AVALIAVEL"
+    },
+    "yellow_cards": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "cache existente",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "total_cards": {
+      "principal": "api_football",
+      "fallback": "apifootball_com",
+      "evidencia": "amarelo+vermelho (conv 1/2) ou direto",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "shots": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics + events",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "shots_on_target": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics + events",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "possession": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "odds_pre_match": {
+      "principal": "api_football",
+      "fallback": "the_odds_api",
+      "evidencia": "odds_snapshot_history (317.951)",
+      "coverage": "VALIDADO(api_football) / SEM_CREDENCIAL(the_odds_api)",
+      "status": "PARCIAL"
+    },
+    "odds_live": {
+      "principal": "api_football",
+      "fallback": "the_odds_api",
+      "evidencia": "live 7.053 snapshots",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "odds_opening": {
+      "principal": "PRIMEIRO_SNAPSHOT_LOCAL",
+      "fallback": "A_CONFIRMAR",
+      "evidencia": "API nao marca abertura; nao inferir",
+      "coverage": "NAO_INFERIDO",
+      "status": "A_CONFIRMAR"
+    }
+  },
+  "auditorias": {
+    "cartoes": [
+      {
+        "provider": "sportmonks",
+        "operacao": "cards_sample",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      },
+      {
+        "provider": "apifootball_com",
+        "operacao": "cards_sample",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      },
+      {
+        "provider": "api_football",
+        "operacao": "cards_sample",
+        "status": "OK",
+        "evidencia": "Etapa 5D: Red Cards=null (207/207 NA), limitacao estrutural",
+        "red_null": "confirmado (null != zero)"
+      }
+    ],
+    "escanteios": [
+      {
+        "provider": "sportmonks",
+        "operacao": "corners_sample",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      },
+      {
+        "provider": "apifootball_com",
+        "operacao": "corners_sample",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      },
+      {
+        "provider": "api_football",
+        "operacao": "corners_sample",
+        "status": "OK",
+        "evidencia": "cache existente; drift temporal EM OBSERVAÇÃO (Etapa 5C)"
+      }
+    ],
+    "gols_controle": [
+      {
+        "provider": "api_football",
+        "operacao": "goals_identity_control",
+        "status": "OK",
+        "evidencia": "HT/FT em /fixtures; divergencia => AMBIGUOUS"
+      },
+      {
+        "provider": "statsbomb_open",
+        "operacao": "goals_identity_control",
+        "status": "A_CONFIRMAR",
+        "nota": "open data historico; smoke test pendente (fetcher/rede)"
+      }
+    ],
+    "odds": [
+      {
+        "provider": "api_football",
+        "operacao": "odds_audit",
+        "status": "OK",
+        "evidencia": "317.951 snapshots; 7.053 live; 298.187 pre_match"
+      },
+      {
+        "provider": "the_odds_api",
+        "operacao": "odds_audit",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      },
+      {
+        "provider": "five_dollar_football",
+        "operacao": "odds_audit",
+        "status": "SEM_CREDENCIAL",
+        "nota": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+      }
+    ],
+    "abertura_fechamento": [
+      {
+        "provider": "api_football",
+        "operacao": "opening_closing",
+        "status": "A_CONFIRMAR",
+        "nota": "API-Football /odds nao marca abertura/fechamento; usar PRIMEIRO_SNAPSHOT_LOCAL, nao inferir OPENING_PROVIDER"
+      }
+    ],
+    "live": [
+      {
+        "provider": "api_football",
+        "operacao": "live_audit",
+        "status": "OK",
+        "evidencia": "/odds/live + /fixtures/statistics; TTL 60s (motor intacto)"
+      }
+    ]
+  },
+  "conflitos": [],
+  "prontidao_coleta": {
+    "api_football": "PRONTO",
+    "the_odds_api": "NAO_PRONTO",
+    "five_dollar_football": "NAO_PRONTO",
+    "sportmonks": "NAO_PRONTO",
+    "apifootball_com": "NAO_PRONTO",
+    "football_data_org": "NAO_PRONTO",
+    "statsbomb_open": "PARCIAL"
+  },
+  "chamadas_autenticadas_executadas": 0,
+  "chamadas_statsbomb_executadas": 0,
+  "bloqueio": "CHAMADAS REAIS BLOQUEADAS POR SEGURANCA"
+}

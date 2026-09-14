@@ -31,6 +31,10 @@ data/*.db-shm
 # Backups por etapa (nao versionaveis)
 backups/
 
+# Respostas brutas da auditoria multi-fonte (Etapa 5F-D): payloads de fontes
+# externas, podem conter dados crus; NUNCA versionar. Tokens redactados.
+data/auditoria_multifonte/
+
 # Scratch files (raiz do repo) - produtos de execucao/inspecao temporaria
 /_tmp_*
 /varredura_*
