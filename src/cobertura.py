@@ -87,7 +87,8 @@ _CLASSE_A = (
            # cobertura parcial: validacao dinamica OBRIGATORIA, vide nota)
     2,     # Champions League (45/90 em 2026; vazios = jogos futuros; live ok)
     3,     # Europa League (14/14)
-    848,   # Conference League (5/6)
+    # 848 (Conference League) RECLASSIFICADA para C em 13/09/2026: amostra
+    # maior (263 jogos encerrados) revelou 128 vazios = 51% sem estatisticas.
     39,    # Premier League (34/36)
     140,   # La Liga (45/45)
     135,   # Serie A ITA (83/83)
@@ -107,7 +108,8 @@ _CLASSE_A = (
     239,   # Primera A COL (275/276)
     253,   # Major League Soccer (341/343 em 2026; auditoria 09/09/2026)
     242,   # Serie A EQU (227/232)
-    252,   # Division Profesional PAR (52/56)
+    # 252 (Paraguai) RECLASSIFICADA de A para B em 13/09/2026: 52/56 = 93%
+    # (< 95%); borda inferior da classe A. Validacao dinamica obrigatoria.
     13,    # Libertadores (39/39)
     11,    # Sudamericana (34/34)
     772,   # Leagues Cup (60/61)
@@ -119,7 +121,13 @@ _CLASSE_A = (
 # Classe B: 100% de entrega na AMOSTRA PEQUENA coletada (a auditoria nao
 # viu falha, mas a amostra e curta para classe A).
 _CLASSE_B = (
-    233, 114, 141, 41, 95, 136, 137, 16, 197, 344, 383, 172, 119, 62, 105,
+    # ETAPA 4 (13/09/2026): 105 removido (e NM Cupen, copa norueguesa com
+    # 0 estatisticas - mapeado por erro como "Eliteserien"; Eliteserien
+    # real = 103). 103 adicionado (28/28 com estatisticas). 252 rebaixado
+    # de A (93% < 95%).
+    233, 114, 141, 41, 95, 136, 137, 16, 197, 344, 383, 172, 119, 62,
+    103,  # Eliteserien (Noruega) - 28/28 jogos com estatisticas (100%)
+    252,  # Division Profesional Paraguai - 52/56 (93%, borda inferior)
 )
 
 # Classe C: cobertura PARCIAL (~50% das partidas com estatisticas).
@@ -128,6 +136,10 @@ _CLASSE_C = (
     82,    # Frauen Bundesliga (11/23)
     45,    # FA Cup
     134,   # Torneo Federal A ARG
+    848,   # UEFA Conference League - 135/263 finalizados com stats (51%);
+           # 128 vazios em jogos ENCERRADOS (auditoria 13/09/2026). Era A
+           # (5/6 na previa); amostra maior revelou ~50% de vazios.
+           # Validacao dinamica OBRIGATORIA; nunca recomendacao automatica.
 )
 
 # Classe E (auditoria): ZERO estatisticas de partida na fonte. Os PLACARES
@@ -153,6 +165,10 @@ _CLASSE_E = (
     290, 673,
     131, 132,  # Primera C / Primera B MET ARG
     887,
+    105,   # NM Cupen (NORUEGA - copa nacional): 0/3 partidas com estatisticas
+           # na auditoria 13/09/2026. Era mapeado por erro como "Eliteserien"
+           # (Eliteserien real = 103, 28/28 com estatisticas -> classe B).
+           # NM Cupen e uma copa de cobertura fraca -> classe E.
 )
 
 # Notas especiais da auditoria (entram no motivo do veredicto)
@@ -173,6 +189,25 @@ _NOTA_ESPECIAL = {
          "fonte (nao afeta analise de dados)",
     2: "UCL: jogos futuros vem sem estatisticas por definicao (live "
        "verificado com entrega integral na auditoria)",
+    # --- ETAPA 4 (13/09/2026) - correcoes baseadas em auditoria cirurgica ---
+    848: "UEFA Conference League: 135/263 partidas encerradas com "
+         "estatisticas (51%); 128 vazios em jogos ENCERRADOS (FT/AET/PEN) "
+         "- nao e atraso, e ausencia estrutural. Reclassificada A->C. "
+         "Validacao dinamica obrigatoria; nunca recomendacao automatica.",
+    103: "Eliteserien (Noruega): 28/28 partidas com estatisticas (100%) na "
+         "auditoria. NOTA: 105 (NM Cupen, copa norueguesa) era mapeado por "
+         "erro como Eliteserien; 103 e a liga real. Adicionada a classe B "
+         "somente na matriz de cobertura - NAO promove ao universo de "
+         "analise (LIGAS_PRIORITARIAS) sem promocao explicita do operador.",
+    105: "NM Cupen (Noruega - copa nacional): 0/3 partidas com estatisticas. "
+         "Era mapeado por erro como 'Eliteserien'. Reclassificada para E. "
+         "Eliteserien real = 103 (ver nota 103).",
+    252: "Division Profesional Paraguai: 52/56 partidas com estatisticas "
+         "(93%) em jogos encerrados. Reclassificada A->B (borda inferior "
+         "da classe A, <95%). Permanece PERMITIDO com rotulo honesto.",
+    3: "UEFA Europa League: 14/14 partidas com estatisticas; cobertura de "
+       "dados SOLIDA. Porem odds pre-jogo NAO fornecidas pela fonte (flag "
+       "odds=false no /leagues) - nao afeta analise de dados, apenas odds.",
 }
 
 _CLASSE_AUDITORIA: dict[int, str] = {}
@@ -631,3 +666,457 @@ def resumo_matriz() -> dict[str, Any]:
             "os mercados/modos; nunca recomendacao automatica"
         ),
     }
+
+
+# ======================================================================
+# ETAPA 4 (13/09/2026) — MATRIZ DEFINITIVA DE COBERTURA DA API
+# ----------------------------------------------------------------------
+# Consolidacao operacional da auditoria cirurgica. Adiciona, SEM alterar
+# a logica de elegibilidade ja existente (classe_estrutural / veredictos
+# / filtragem por mercado), camadas de status para ODDS, LIVE/PRESSAO,
+# BACKTEST e RESULTADO — para servir como filtro ANTES das chamadas caras
+# e como relatorio oficial.
+#
+# REGRAS DA ETAPA 4 (verbatim do operador):
+#   - PRECISAO > QUANTIDADE. Nao ampliar cobertura so para aumentar jogos.
+#   - Nao invente cobertura; o que vale e o que a conta/ plano entrega.
+#   - Estados por MERCADO (nao bloqueio global): se falta corners, GOALS
+#     continua.
+#   - LIVE PARCIAL nao e tratado como completo; None nunca vira zero.
+#   - Odds LIVE nao disponivel na fonte -> nunca inventar.
+#   - A matriz NAO promove nenhum mercado experimental para validado.
+# ======================================================================
+
+# --- Status de BACKTEST (FASE G) ---
+BACKTEST_VIAVEL = "VIÁVEL"
+BACKTEST_PARCIAL = "PARCIAL"
+BACKTEST_INVIÁVEL = "INVIÁVEL"
+BACKTEST_A_CONFIRMAR = "A CONFIRMAR"
+
+# --- Status de LIVE / PRESSAO 5/10/15 (FASE C) ---
+LIVE_COMPLETO = "LIVE COMPLETO"
+LIVE_PARCIAL = "LIVE PARCIAL"
+LIVE_INSUFICIENTE = "LIVE INSUFICIENTE"
+LIVE_NAO_TESTADO = "LIVE NÃO TESTADO"
+
+# --- Status de ODDS (FASE D) ---
+ODDS_PERMITIDO = "PERMITIDO"
+ODDS_INSUFICIENTE = "INSUFICIENTE"
+ODDS_NAO_TESTADO = "NÃO TESTADO"
+ODDS_LIVE_INDISPONIVEL = "INDISPONÍVEL NA FONTE"
+
+# --- Mercado RESULTADO (FASE H) ---
+MERCADO_RESULTADO = "RESULTADO"
+# Espelha src/resultado.py:RISCO_STATUS_RESULTADO — a matriz de cobertura
+# NUNCA promove RESULTADO para validado (FASE H).
+STATUS_RESULTADO_EXPERIMENTAL = "EXPERIMENTAL EM OBSERVAÇÃO"
+# Espelha src/live_pressure.py:PRESSURE_STATUS — pressao 5/10/15 continua
+# EXPERIMENTAL / A CALIBRAR; a matriz nao cria threshold (FASE H).
+STATUS_PRESSAO_EXPERIMENTAL = "EXPERIMENTAL / A CALIBRAR"
+
+# Campos usados para classificar a completude LIVE (FASE C). Ausencia de
+# qualquer campo importante mantem LIVE PARCIAL/INSUFICIENTE — None nunca
+# vira zero.
+CAMPOS_PRESSAO = (
+    "minuto",
+    "placar",
+    "Corner Kicks",
+    "Total Shots",
+    "Shots on Goal",
+    "Blocked Shots",
+    "Ball Possession",
+)
+
+# --- Odds PRE (FASE D) ---
+# Ligas com flag odds=false no /leagues (confirmado pela auditoria): odds
+# pre-jogo NAO fornecidas pela fonte. Nao afeta analise de DADOS, apenas
+# odds -> OPORTUNIDADE ESTATISTICA sem odd real.
+_ODDS_PRE_NEGADO_COBERTURA = frozenset({3, 848, 475, 624})
+
+# Ligas com odds pre-jogo CONFIRMADAS na fonte (flag odds=true e/ou odds
+# reais vistas no cache). Resto => NAO TESTADO (nao assume, nao inventa).
+_ODDS_PRE_CONFIRMADO_TRUE = frozenset({
+    2, 11, 39, 61, 71, 73, 76, 78, 82, 88, 94, 128, 130, 135, 140,
+    203, 233, 239, 241, 253, 262, 479,
+})
+
+# --- LIVE / PRESSAO (FASE C) ---
+# Ligas onde LIVE foi confirmado por observacao na auditoria (16 stats ao
+# vivo verificadas). Usado para fundamentar LIVE COMPLETO/PARCIAL.
+_LIVE_CONFIRMADO_OBSERVACAO = frozenset({
+    2, 88, 307, 39, 140, 135, 78, 61, 94, 71, 128, 89, 204, 106, 113, 233,
+})
+
+# Ligas com cobertura LIVE explicitamente PARCIAL mesmo sendo classe A/B
+# (validacao dinamica obrigatoria; nunca recomendacao automatica).
+_LIVE_PARCIAL_OBRIGATORIO = frozenset({73, 848})
+
+# Nomes canonicos para o relatorio oficial (fonte: auditoria 08-13/09/2026).
+# Para IDs fora deste mapa, o relatorio usa f"Liga {id}" — honesto, sem
+# inventar nome.
+_NOME_LIGA = {
+    71: "Brasileirão Série A",
+    72: "Série B BR",
+    73: "Copa do Brasil",
+    2: "UEFA Champions League",
+    3: "UEFA Europa League",
+    848: "UEFA Conference League",
+    39: "Premier League (Inglaterra)",
+    140: "La Liga (Espanha)",
+    135: "Serie A (Itália)",
+    78: "Bundesliga (Alemanha)",
+    61: "Ligue 1 (França)",
+    88: "Eredivisie (Holanda)",
+    94: "Primeira Liga (Portugal)",
+    203: "Süper Lig (Turquia)",
+    204: "1. Lig (Turquia)",
+    106: "Ekstraklasa (Polônia)",
+    113: "Allsvenskan (Suécia)",
+    144: "Jupiler Pro League (Bélgica)",
+    128: "Liga Profesional (Argentina)",
+    262: "Liga MX (México)",
+    307: "Saudi Pro League",
+    281: "Primera Division (Uruguai)",
+    239: "Primera A (Colômbia)",
+    253: "Major League Soccer",
+    242: "Serie A (Equador)",
+    252: "Division Profesional (Paraguai)",
+    13: "Copa Libertadores",
+    11: "Copa Sudamericana",
+    772: "Leagues Cup",
+    89: "Eerste Divisie (Holanda 2ª)",
+    475: "Paulistão A1",
+    624: "Carioca 1",
+    233: "Premier League (Egito)",
+    114: "Superettan (Suécia 2ª)",
+    141: "Segunda División (Espanha)",
+    41: "League One (Inglaterra)",
+    95: "Segunda Liga (Portugal)",
+    136: "Série B (Itália)",
+    137: "Coppa Italia",
+    16: "CONCACAF Champions League",
+    197: "Super League (Grécia)",
+    344: "Liga 344 (1ª divisão, amostra pequena)",
+    383: "Liga 383 (Israel, amostra pequena)",
+    172: "Liga 172 (1ª divisão, amostra pequena)",
+    119: "Liga 119 (1ª divisão, amostra pequena)",
+    62: "Liga 62 (1ª divisão, amostra pequena)",
+    103: "Eliteserien (Noruega)",
+    105: "NM Cupen (Noruega - copa)",
+    479: "Canadian Premier League",
+    82: "Frauen Bundesliga",
+    45: "FA Cup",
+    134: "Torneo Federal A (Argentina)",
+    75: "Série C BR",
+    76: "Série D BR",
+    129: "Primera Nacional (Argentina)",
+    130: "Copa Argentina",
+    241: "Copa Colombia",
+    205: "2. Lig (Turquia)",
+    219: "2. Liga (Áustria)",
+    138: "Liga 138 (amostra pequena)",
+    943: "Série C (Itália - amostra pequena)",
+    667: "Amistosos de seleções",
+    477: "Gaúcho",
+    629: "Mineiro",
+    606: "Paranaense",
+    604: "Catarinense",
+    627: "Paraense",
+    612: "Copa do Nordeste",
+    290: "Liga 290",
+    673: "Liga 673",
+    131: "Primera C MET (Argentina)",
+    132: "Primera B MET (Argentina)",
+    887: "Liga 887",
+}
+
+
+def _status_estrutural(
+    league_id: int | None, mercado: str, modo: str,
+) -> str:
+    """Status estrutural (PERMITIDO/OBSERVACAO/BLOQUEADO) de uma
+    combinacao (liga, mercado, modo), sem olhar o fixture."""
+    classe, _ = classe_estrutural(league_id, None, mercado, modo)
+    return _STATUS_POR_CLASSE.get(classe, STATUS_OBSERVACAO)
+
+
+def status_odds_live() -> tuple[str, str]:
+    """Odds LIVE: SEMPRE indisponiveis na fonte (auditoria 28/28 vazios
+    em /odds/live). Nao inventa, nao converte ausencia em zero.
+
+    Retorna (ODDS_LIVE_INDISPONIVEL, motivo). Espelha src/odds.py
+    SEM_ODD_LIVE.
+    """
+    return (
+        ODDS_LIVE_INDISPONIVEL,
+        "auditoria 13/09/2026: /odds/live retornou 0/28 partidas com "
+        "odds ao vivo na conta/plano atual. Odds LIVE nao disponiveis "
+        "na fonte -> OPORTUNIDADE ESTATISTICA sem odd real; ausencia "
+        "nunca vira zero.",
+    )
+
+
+def status_odds_pre(
+    league_id: int | None, league_name: str | None = None,
+) -> tuple[str, str]:
+    """Odds PRE-jogo por liga (FASE D).
+
+    Retorna (status, motivo):
+      - PERMITIDO: odds confirmadas na fonte para a liga;
+      - INSUFICIENTE: flag odds=false / odds nao fornecidas (nao afeta
+        analise de dados, apenas odds);
+      - NAO TESTADO: sem evidencia positiva nem negativa (nao assume).
+    """
+    if league_id is None:
+        return (ODDS_NAO_TESTADO,
+                "liga sem ID: odds pre nao testadas (nao assume cobertura)")
+    if league_id in _ODDS_PRE_NEGADO_COBERTURA:
+        nome = _NOME_LIGA.get(league_id, league_name or f"Liga {league_id}")
+        return (ODDS_INSUFICIENTE,
+                f"{nome}: odds pre-jogo NAO fornecidas pela fonte (flag "
+                f"odds=false no /leagues, confirmado na auditoria). Nao "
+                f"afeta analise de DADOS -> OPORTUNIDADE ESTATISTICA sem "
+                f"odd real.")
+    if league_id in _ODDS_PRE_CONFIRMADO_TRUE:
+        nome = _NOME_LIGA.get(league_id, league_name or f"Liga {league_id}")
+        return (ODDS_PERMITIDO,
+                f"{nome}: odds pre-jogo confirmadas na fonte (14 "
+                f"bookmakers, 183 mercados observados no cache).")
+    return (ODDS_NAO_TESTADO,
+            f"Liga {league_id}: odds pre-jogo nao testadas na auditoria "
+            f"(nao assume existencia nem ausencia).")
+
+
+def status_live_pressao(
+    league_id: int | None, league_name: str | None = None,
+) -> tuple[str, str, tuple[str, ...]]:
+    """Classifica a cobertura LIVE para pressao 5/10/15 (FASE C).
+
+    Usa minuto/placar/Corner Kicks/Total Shots/Shots on Goal/Blocked
+    Shots/Ball Possession. LIVE PARCIAL nao e tratado como completo;
+    campo importante ausente -> mantem explicito. Retorna (status,
+    motivo, campos_confirmados).
+    """
+    if league_id is None:
+        return (LIVE_NAO_TESTADO,
+                "liga sem ID: cobertura live nao testada (nao assume)",
+                ())
+    base = _CLASSE_AUDITORIA.get(league_id)
+    nome = _NOME_LIGA.get(league_id, league_name or f"Liga {league_id}")
+
+    if base is None:
+        return (LIVE_NAO_TESTADO,
+                f"{nome}: sem evidencia live na auditoria -> NAO TESTADO "
+                f"(nao assume, nao inventa).",
+                ())
+
+    if league_id in _LIVE_PARCIAL_OBRIGATORIO:
+        # 73 (Copa do Brasil: 88/150 parcial) e 848 (Conference: 51%):
+        # LIVE PARCIAL mesmo em classe A/C. Validacao dinamica obrigatoria.
+        return (LIVE_PARCIAL,
+                f"{nome}: cobertura live PARCIAL (auditoria). "
+                f"Validacao dinamica obrigatoria; LIVE PARCIAL nao e "
+                f"tratado como completo. Pressao 5/10/15 = "
+                f"{STATUS_PRESSAO_EXPERIMENTAL}.",
+                ("minuto", "placar", "Corner Kicks"))
+
+    if base in ("A", "B"):
+        campos_full = CAMPOS_PRESSAO
+        obs = " (live verificado na auditoria)" if (
+            league_id in _LIVE_CONFIRMADO_OBSERVACAO) else ""
+        return (LIVE_COMPLETO,
+                f"{nome}: classe {base}{obs} -> entrega live confirmada "
+                f"(16 tipos ao vivo). Pressao 5/10/15 = "
+                f"{STATUS_PRESSAO_EXPERIMENTAL} (matriz nao cria threshold).",
+                campos_full)
+
+    if base == "C":
+        return (LIVE_PARCIAL,
+                f"{nome}: classe C -> cobertura live PARCIAL (~50% das "
+                f"partidas com estatisticas). LIVE PARCIAL nao e tratado "
+                f"como completo; campo ausente mantem explicito. Pressao "
+                f"5/10/15 = {STATUS_PRESSAO_EXPERIMENTAL}.",
+                ("minuto", "placar", "Corner Kicks"))
+
+    # base == "E": sem estatisticas de partida na fonte
+    return (LIVE_INSUFICIENTE,
+            f"{nome}: classe E -> zero estatisticas live na fonte. "
+            f"Pressao 5/10/15 = {STATUS_PRESSAO_EXPERIMENTAL} mas SEM "
+            f"dado para calcular.",
+            ())
+
+
+def status_backtest(
+    league_id: int | None, league_name: str | None = None,
+) -> tuple[str, str]:
+    """Status de viabilidade de BACKTEST por liga (FASE G).
+
+    Considera: qty de fixtures, profundidade de historico, estatisticas,
+    corners/cards/gols/placar, odds historicas reais. NAO executa
+    backtest; somente prepara a matriz.
+    """
+    if league_id is None:
+        return (BACKTEST_A_CONFIRMAR,
+                "liga sem ID: backtest a confirmar (nao assume amostra)")
+    base = _CLASSE_AUDITORIA.get(league_id)
+    nome = _NOME_LIGA.get(league_id, league_name or f"Liga {league_id}")
+
+    if base is None:
+        return (BACKTEST_A_CONFIRMAR,
+                f"{nome}: sem evidencia na auditoria -> backtest A "
+                f"CONFIRMAR (nao assume amostra).")
+    if league_id in _LIVE_PARCIAL_OBRIGATORIO:
+        return (BACKTEST_PARCIAL,
+                f"{nome}: backtest PARCIAL - cobertura de estatisticas "
+                f"parcial ({'88/150' if league_id == 73 else '51%'}); "
+                f"jogos sem estatisticas devem ser EXCLUIDOS da amostra "
+                f"(nunca zerados). Odds historicas reais limitadas.")
+    if base == "A":
+        return (BACKTEST_VIAVEL,
+                f"{nome}: classe A -> amostra ampla e estatisticas em "
+                f">=95% dos jogos; backtest VIÁVEL (fixtures suficientes, "
+                f"historico profundo, estatisticas completas). Odds pre "
+                f"historicas disponiveis quando status_odds_pre=PERMITIDO.")
+    if base == "B":
+        return (BACKTEST_A_CONFIRMAR,
+                f"{nome}: classe B -> 100% na amostra pequena; backtest A "
+                f"CONFIRMAR (amostra pode ser curta para conclusao "
+                f"estatistica robusta).")
+    if base == "C":
+        return (BACKTEST_PARCIAL,
+                f"{nome}: classe C -> backtest PARCIAL (~50% dos jogos "
+                f"com estatisticas); jogos sem estatisticas EXCLUIDOS "
+                f"da amostra, nunca zerados. Conclusao limitada.")
+    # base == "E"
+    return (BACKTEST_INVIÁVEL,
+            f"{nome}: classe E -> zero estatisticas de partida na fonte; "
+            f"backtest INVIÁVEL para corners/cards/estatisticas (so "
+            f"placares/gols via historico de resultados).")
+
+
+def status_resultado(
+    league_id: int | None, league_name: str | None = None,
+    modo: str = MODO_PRE_GAME,
+) -> tuple[str, str]:
+    """Familia RESULTADO (FASE H): segue o veredicto de GOALS (mesmo
+    dado base: placar / projetacao de gols), MAS permanece EXPERIMENTAL
+    EM OBSERVAÇÃO. A matriz de cobertura NUNCA promove um mercado
+    experimental para validado.
+
+    Retorna (status_cobertura, status_validacao).
+    """
+    cov = _status_estrutural(league_id, MERCADO_GOALS, modo)
+    nome = _NOME_LIGA.get(league_id, league_name or
+                          (f"Liga {league_id}" if league_id else "liga"))
+    return (cov,
+            f"{nome}: RESULTADO segue cobertura de GOALS ({cov} em "
+            f"{modo}), porem permanece {STATUS_RESULTADO_EXPERIMENTAL} "
+            f"- validacao estatistica pendente. A matriz nao promove "
+            f"mercado experimental para validado.")
+
+
+# ----------------------------------------------------------------------
+# Linha oficial da matriz (FASE I) — 16 colunas exigidas
+# ----------------------------------------------------------------------
+@dataclass
+class LinhaMatrizOficial:
+    competicao: str
+    id_liga: int | None
+    status_geral: str
+    goals_pre: str
+    goals_live: str
+    corners_pre: str
+    corners_live: str
+    cards_pre: str
+    cards_live: str
+    resultado_pre: str
+    resultado_live: str
+    pressao_live: str
+    odds_pre: str
+    odds_live: str
+    backtest: str
+    motivo_observacao: str
+
+
+def _status_geral_rollup(statuses: list[str]) -> str:
+    """Rollup HONESTO do status geral por mercado (nao bloqueio global).
+    STATUS GERAL e apenas um rotulo de resumo; o filtro real e por
+    mercado (filtrar_avaliacoes_por_cobertura)."""
+    if not statuses:
+        return "NÃO TESTADO"
+    if all(s == STATUS_PERMITIDO for s in statuses):
+        return STATUS_PERMITIDO
+    if all(s == STATUS_BLOQUEADO for s in statuses):
+        return STATUS_BLOQUEADO
+    tem_permitido = any(s == STATUS_PERMITIDO for s in statuses)
+    tem_bloqueado = any(s == STATUS_BLOQUEADO for s in statuses)
+    if tem_permitido and tem_bloqueado:
+        return "MISTO (PERMITIDO+BLOQUEADO)"
+    if tem_bloqueado:
+        return "MISTO (OBSERVAÇÃO+BLOQUEADO)"
+    return STATUS_OBSERVACAO  # so PERMITIDO+OBSERVACAO
+
+
+def relatorio_matriz_oficial() -> "list[LinhaMatrizOficial]":
+    """Gera a matriz oficial completa (FASE I), uma linha por competicao
+    da auditoria, com as 16 colunas exigidas.
+
+    Filtro ANTES das chamadas caras (FASE F): o consumer usa esta matriz
+    para decidir se consulta /fixtures/statistics, /odds, etc. por
+    COMPETICAO x MERCADO x MODO. Nao descarta jogo inteiro quando apenas
+    um mercado e insuficiente.
+    """
+    linhas: list[LinhaMatrizOficial] = []
+    for league_id in sorted(_CLASSE_AUDITORIA):
+        nome = _NOME_LIGA.get(league_id, f"Liga {league_id}")
+
+        g_pre = _status_estrutural(league_id, MERCADO_GOALS, MODO_PRE_GAME)
+        g_live = _status_estrutural(league_id, MERCADO_GOALS, MODO_LIVE)
+        c_pre = _status_estrutural(league_id, MERCADO_CORNERS, MODO_PRE_GAME)
+        c_live = _status_estrutural(league_id, MERCADO_CORNERS, MODO_LIVE)
+        cd_pre = _status_estrutural(league_id, MERCADO_CARDS, MODO_PRE_GAME)
+        cd_live = _status_estrutural(league_id, MERCADO_CARDS, MODO_LIVE)
+
+        # RESULTADO segue GOALS, permanece EXPERIMENTAL (FASE H)
+        r_pre_cov, _ = status_resultado(league_id, nome, MODO_PRE_GAME)
+        r_live_cov, _ = status_resultado(league_id, nome, MODO_LIVE)
+        r_pre = f"{r_pre_cov} · {STATUS_RESULTADO_EXPERIMENTAL}"
+        r_live = f"{r_live_cov} · {STATUS_RESULTADO_EXPERIMENTAL}"
+
+        live_st, _, _ = status_live_pressao(league_id, nome)
+        pressao = f"{live_st} · {STATUS_PRESSAO_EXPERIMENTAL}"
+
+        odds_pre_st, _ = status_odds_pre(league_id, nome)
+        odds_live_st, _ = status_odds_live()
+
+        bt_st, _ = status_backtest(league_id, nome)
+
+        status_geral = _status_geral_rollup(
+            [g_pre, g_live, c_pre, c_live, cd_pre, cd_live])
+
+        nota = _NOTA_ESPECIAL.get(league_id)
+        if nota is None:
+            base = _CLASSE_AUDITORIA.get(league_id, "?")
+            nota = f"classe {base} (auditoria 08-13/09/2026)"
+        else:
+            nota = f"classe {_CLASSE_AUDITORIA.get(league_id, '?')} - {nota}"
+
+        linhas.append(LinhaMatrizOficial(
+            competicao=nome,
+            id_liga=league_id,
+            status_geral=status_geral,
+            goals_pre=g_pre,
+            goals_live=g_live,
+            corners_pre=c_pre,
+            corners_live=c_live,
+            cards_pre=cd_pre,
+            cards_live=cd_live,
+            resultado_pre=r_pre,
+            resultado_live=r_live,
+            pressao_live=pressao,
+            odds_pre=odds_pre_st,
+            odds_live=odds_live_st,
+            backtest=bt_st,
+            motivo_observacao=nota,
+        ))
+    return linhas
