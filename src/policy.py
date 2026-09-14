@@ -268,8 +268,9 @@ def _comparar_resultado(
     benchmark_gols: dict[str, Any] | None,
     cobertura: float,
 ) -> ComparacaoMercado | None:
-    """Comparacao de UMA linha da familia RESULTADO (bloco validado e
-    aprovado 07/09/2026: 1X2, Dupla Chance, DNB, AH).
+    """Comparacao de UMA linha da familia RESULTADO (bloco EXPERIMENTAL
+    EM OBSERVACAO - aprovacao tecnica 07/09/2026 para entrar no
+    comparador; aguarda validacao estatistica: 1X2, Dupla Chance, DNB, AH).
 
     Mesma HEURISTICA DE POLITICA do O/U (rotulada, nunca calculo
     validado), com os componentes adaptados ao mercado:
@@ -426,8 +427,9 @@ def comparar_mercados(
     for a in pool:
         m = _RE_LINHA.match((a.linha or "").strip())
         if not m:
-            # Familia RESULTADO validada (1X2/DC/DNB/AH): concorre em
-            # igualdade no MESMO score. Linha de outro formato => fora.
+            # Familia RESULTADO (experimental em observacao: 1X2/DC/DNB/AH):
+            # concorre em igualdade no MESMO score. Linha de outro formato
+            # => fora. Nao e operacional validada - apenas comparada.
             comp_res = _comparar_resultado(
                 a, totais_por_mercado.get("gols") or [], benchmark_gols,
                 cobertura,

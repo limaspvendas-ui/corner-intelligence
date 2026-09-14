@@ -306,8 +306,9 @@ def cmd_prejogoop(args: argparse.Namespace) -> str:
     --politica aplica a POLITICA PERMANENTE DE UNIVERSO E SELECAO
     (src/policy.py): exige competicao do universo forte e registra
     somente a MELHOR oportunidade do jogo (comparacao de TODOS os
-    mercados validados - gols, escanteios, TOTAL de cartoes E a
-    familia resultado: 1X2/Dupla Chance/DNB/AH - em igualdade, sem
+    mercados - gols, escanteios, TOTAL de cartoes (validados) E a
+    familia resultado: 1X2/Dupla Chance/DNB/AH (bloco EXPERIMENTAL EM
+    OBSERVACAO, aguarda validacao estatistica) - em igualdade, sem
     preferencia por familia; sem evidencia forte => REPROVADO).
     Nenhum calculo validado muda.
 

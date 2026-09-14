@@ -1,11 +1,17 @@
 """MERCADOS DE RESULTADO PRE-JOGO: 1X2, DUPLA CHANCE, DNB, HANDICAP
-ASIATICO - bloco NOVO da ampliacao controlada de mercados.
+ASIATICO - bloco EXPERIMENTAL EM OBSERVACAO da ampliacao controlada.
 
-Este bloco NAO esta liberado para recomendacao: a regra da ampliacao
-exige logica validada (liquidacao + testes) ANTES de qualquer uso real.
-Ele apenas PRODUZ avaliacoes no mesmo formato do motor validado
-(AvaliacaoPre) para que, apos validacao do operador, entrem no mesmo
-comparador de oportunidades (src/policy.py).
+STATUS OPERACIONAL (alinhamento Etapa 2, 13/09/2026): o bloco possui
+logica TECNICA (liquidacao + testes) mas NAO possui VALIDACAO
+ESTATISTICA formal (calibracao com amostra madura - MIN_AMOSTRA nao
+atingida; a politica permanente do projeto exige AH "somente quando
+validados"). Por isso NAO e "recomendacao operacional validada": e
+OBSERVACAO/EXPERIMENTAL. O bloco PRODUZ avaliacoes no mesmo formato do
+motor (AvaliacaoPre) e concorre no comparador de oportunidades
+(src/policy.py) para estudo, calibracao e backtest futuro - mas toda
+avaliacao carrega o rotulo RISCO_STATUS_RESULTADO na trilha de riscos,
+congelado no registro, de modo que novas recomendacoes de RESULTADO
+NUNCA sejam tratadas silenciosamente como operacionais validadas.
 
 Nada do motor validado e alterado:
     - baselines: MESMO cruzamento casa/fora do motor (_taxa_cruzada);
@@ -50,6 +56,19 @@ MAGNITUDES_AH_PREJOGO = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5)
 MAX_GOLS_LADO = 8
 
 MERCADO_RESULTADO = "resultado"
+
+# Status operacional da familia RESULTADO (alinhamento Etapa 2,
+# 13/09/2026): EXPERIMENTAL EM OBSERVACAO. Logica tecnica (liquidacao +
+# testes) existe, mas validacao estatistica formal (calibracao com
+# amostra madura) NAO. Marcador congelado na trilha de riscos de toda
+# avaliacao nova (pre-jogo e live), para que recomendacoes de RESULTADO
+# nunca sejam tratadas silenciosamente como operacionais validadas.
+# Recomendacoes historicas permanecem intactas (imutabilidade do
+# registro); o marcador vale somente para o comportamento FUTURO.
+RISCO_STATUS_RESULTADO = (
+    "FAMILIA RESULTADO: experimental em observacao (aguarda validacao "
+    "estatistica) - recomendacao observacional, nao operacional validada"
+)
 
 _MODELO = (
     "Poisson por lado sobre 90 minutos completos "
@@ -232,10 +251,13 @@ def avaliar_resultado_prejogo(
 ) -> list[AvaliacaoPre]:
     """Avalia 1X2, Dupla Chance, DNB e AH ANTES do jogo comecar.
 
-    Mesma regra do motor validado: sem sustentacao (sem medias de gols)
-    => lista vazia, nada e inventado. As avaliacoes entram NO FORMATO
-    AvaliacaoPre para futura comparacao unificada - mas este bloco NAO
-    esta liberado para recomendacao/registro (aguarda validacao).
+    Mesma regra do motor: sem sustentacao (sem medias de gols) => lista
+    vazia, nada e inventado. As avaliacoes entram NO FORMATO AvaliacaoPre
+    para comparacao unificada no comparador (src/policy.py) - bloco
+    EXPERIMENTAL EM OBSERVACAO: logica tecnica valida, mas sem validacao
+    estatistica formal. Toda avaliacao carrega RISCO_STATUS_RESULTADO,
+    congelado no registro, de modo que recomendacoes de RESULTADO nao
+    sao tratadas silenciosamente como operacionais validadas.
     """
     lam_h, lam_a, det = lambdas_prejogo(hist, benchmark_gols)
     if lam_h is None or lam_a is None:
@@ -250,7 +272,10 @@ def avaliar_resultado_prejogo(
     validas = (benchmark_gols or {}).get("partidas_validas")
     conf, comps = _confianca_prejogo(n_min, validas, h2h_n)
 
-    riscos = ["mercado de resultado: modelo Poisson por lado (estimativa)"]
+    riscos = [
+        RISCO_STATUS_RESULTADO,
+        "mercado de resultado: modelo Poisson por lado (estimativa)",
+    ]
     if validas is None:
         riscos.append("sem benchmark da liga: apenas historico dos times")
     if n_min < 10:

@@ -53,9 +53,13 @@ RESULTADOS_VALIDOS = (
 TIPOS_VALIDOS = ("prejogo", "live")
 
 # Versao/tipo da analise que gerou a recomendacao
-# live-op-2.3: a familia RESULTADO (1X2/DC/DNB/AH, leque validado) passa
-# a concorrer no fluxo live com linhas canonicas liquidadaveis; sem odd
-# live => OPORTUNIDADE ESTATISTICA. Rotulo apenas - nenhum calculo muda.
+# live-op-2.3: a familia RESULTADO (1X2/DC/DNB/AH, leque canonico
+# liquidadavel - bloco EXPERIMENTAL EM OBSERVACAO, aguarda validacao
+# estatistica) passa a concorrer no fluxo live com linhas canonicas
+# liquidadaveis; sem odd live => OPORTUNIDADE ESTATISTICA. Rotulo apenas
+# - nenhum calculo muda. O status experimental e marcado em cada
+# avaliacao por RISCO_STATUS_RESULTADO (src/resultado.py), congelado na
+# trilha de riscos do registro.
 VERSAO_LIVE = "live-op-2.3-familia-resultado"
 VERSAO_PREJOGO = "prejogo-1.0"
 

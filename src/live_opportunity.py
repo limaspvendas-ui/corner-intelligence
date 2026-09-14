@@ -1036,23 +1036,28 @@ def _odds_resultado_por_linha(candidato: Candidato) -> dict[str, OddUsada]:
 
 def _avaliar_resultado(candidato: Candidato) -> list[Avaliacao]:
     """Familia RESULTADO ao vivo: 1X2, Dupla Chance, DNB e AH do LEQUE
-    VALIDADO (src/resultado.py) sobre a distribuicao de margem AO VIVO
-    (_distribuicao_margem: placar atual + minuto + tempo restante -
-    a probabilidade reflete o ESTADO da partida, nunca a pre-jogo).
+    CANONICO (src/resultado.py - bloco EXPERIMENTAL EM OBSERVACAO) sobre
+    a distribuicao de margem AO VIVO (_distribuicao_margem: placar atual
+    + minuto + tempo restante - a probabilidade reflete o ESTADO da
+    partida, nunca a pre-jogo).
 
     Linhas CANONICAS => toda linha produzida e liquidadavel pelo TEXTO
     EXATO congelado no registro (src/settlement.py, mesma fonte de
-    verdade do bloco pre-jogo aprovado). As probabilidades vem das
-    MESMAS funcoes validadas do bloco (prob_1x2/prob_dupla_chance/
-    prob_dnb/prob_ah: convencao uniforme, DNB = AH 0.0 mesmo numero)
-    aplicadas a distribuicao live - nada e recalculado aqui.
+    verdade do bloco pre-jogo). As probabilidades vem das MESMAS funcoes
+    do bloco (prob_1x2/prob_dupla_chance/prob_dnb/prob_ah: convencao
+    uniforme, DNB = AH 0.0 mesmo numero; liquidacao validada em
+    src/handicap.py) aplicadas a distribuicao live - nada e recalculado
+    aqui. Toda avaliacao carrega RISCO_STATUS_RESULTADO (experimental em
+    observacao - nao operacional validada).
 
     Odd LIVE real e anexada SOMENTE quando o feed oferece a MESMA linha
     (convencao de sinal validada real_line); sem odd => a linha concorre
     como OPORTUNIDADE ESTATISTICA (odd/bookmaker permanecem None)."""
     from src.resultado import (  # import local: src.resultado importa
-        # deste modulo (evita import circular) e as funcoes sao as
-        # MESMAS ja validadas no bloco pre-jogo aprovado
+        # deste modulo (evita import circular); funcoes do bloco
+        # EXPERIMENTAL EM OBSERVACAO (liquidacao validada em
+        # src/handicap.py)
+        RISCO_STATUS_RESULTADO,
         fmt_ah,
         linhas_ah_prejogo,
         prob_1x2,
@@ -1072,6 +1077,7 @@ def _avaliar_resultado(candidato: Candidato) -> list[Avaliacao]:
         RateBlend(0.0, None, None, 0.0, snap.elapsed, ""), False,
     )
     base_riscos = [
+        RISCO_STATUS_RESULTADO,
         "mercado de resultado: modelo Poisson por lado (estimativa)",
         "placar muda o estado a qualquer momento",
     ]
@@ -1102,7 +1108,7 @@ def _avaliar_resultado(candidato: Candidato) -> list[Avaliacao]:
     _add("Dupla chance X2", dc["X2"])
     _add("Dupla chance 12", dc["12"])
 
-    # DNB = AH 0.0 (convencao uniforme aprovada no bloco pre-jogo:
+    # DNB = AH 0.0 (convencao uniforme do bloco pre-jogo:
     # empate devolve e nao conta; MESMO numero do AH 0.0)
     for lado in ("mandante", "visitante"):
         p = prob_dnb(dist, lado)
@@ -1117,7 +1123,7 @@ def _avaliar_resultado(candidato: Candidato) -> list[Avaliacao]:
             ),
         )
 
-    # Handicap asiatico por lado (leque validado 0.0 +/-0.25 ... +/-1.5)
+    # Handicap asiatico por lado (leque canonico liquidadavel 0.0 +/-0.25 ... +/-1.5)
     for lado in ("mandante", "visitante"):
         for linha in linhas_ah_prejogo():
             p = prob_ah(dist, lado, linha)

@@ -363,11 +363,13 @@ def scan_pregame_opportunities(
     avalia linhas, aprova com a disciplina do live e congela.
 
     `incluir_resultado` (default False: o fluxo legado gols/escanteios
-    permanece EXATAMENTE como era) acrescenta a familia RESULTADO ja
-    validada (src/resultado.py: 1X2, Dupla Chance, DNB, AH) a lista de
-    avaliacoes - usada pela POLITICA para comparar todos os mercados
-    validados em igualdade. Nenhum calculo de gols/escanteios muda; as
-    avaliacoes de resultado vem do proprio bloco validado.
+    permanece EXATAMENTE como era) acrescenta a familia RESULTADO
+    (src/resultado.py: 1X2, Dupla Chance, DNB, AH - bloco EXPERIMENTAL
+    EM OBSERVACAO, aprovacao tecnica 07/09/2026; aguarda validacao
+    estatistica) a lista de avaliacoes - usada pela POLITICA para
+    comparar todos os mercados em igualdade. Nenhum calculo de
+    gols/escanteios muda; as avaliacoes de resultado vem do proprio
+    bloco e carregam o marcador RISCO_STATUS_RESULTADO.
 
     `incluir_cartoes` (default False: fluxo legado preservado) acrescenta
     o TOTAL de cartoes pre-jogo do bloco validado (src/cartoes.py) com o
@@ -452,9 +454,11 @@ def scan_pregame_opportunities(
 
     avaliacoes = avaliar_pregame(hist, bench_esc, bench_gols, h2h_n)
     if incluir_resultado:
-        # Familia RESULTADO validada (bloco aprovado 07/09/2026): entra
-        # na MESMA lista para a comparacao de mercados da politica.
-        # Nada aqui recalcula gols/escanteios - o bloco tem motor proprio.
+        # Familia RESULTADO (bloco EXPERIMENTAL EM OBSERVACAO, aprovacao
+        # tecnica 07/09/2026; aguarda validacao estatistica): entra na
+        # MESMA lista para a comparacao de mercados da politica. Nada
+        # aqui recalcula gols/escanteios - o bloco tem motor proprio e
+        # ja marca cada avaliacao com RISCO_STATUS_RESULTADO.
         from src.resultado import avaliar_resultado_prejogo
 
         avaliacoes = avaliacoes + avaliar_resultado_prejogo(
