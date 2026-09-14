@@ -230,8 +230,10 @@ teste anterior enfraquecido.
 
 ## 15. HASH DO COMMIT
 
-A ser registrado ao final: commit "etapa 5b: validacao temporal fora da amostra"
-na branch `etapa-5b-validacao-temporal`.
+- Commit principal (modulo + testes + JSON + relatorio + correcao doc):
+  **`23c9df9`** — "etapa 5b: validacao temporal fora da amostra do backtest".
+- Commit base das regras congeladas (FASE B): `4cd9133`.
+- Branch: `etapa-5b-validacao-temporal` (sem merge em main, sem push).
 
 ## 16. GIT STATUS FINAL
 
