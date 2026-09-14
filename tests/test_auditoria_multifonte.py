@@ -126,14 +126,58 @@ def test_gate_aberto_mas_sem_credencial_bloqueia(gate_aberto, sem_credenciais):
 
 
 def test_gate_aberto_com_credencial_permitiria(gate_aberto, monkeypatch):
+    # Gate aberto + credencial presente => _guard passa; transporte fake
+    # (sem rede) => parser produz NormalizedOdd do shape documentado v4.
     monkeypatch.setenv("THE_ODDS_API_KEY", "dummy-value-not-real")
-    p = TheOddsAPIProvider()
+    canned = [{
+        "id": "evt1", "sport_key": "soccer_epl",
+        "commence_time": "2026-09-14T20:00:00Z",
+        "home_team": "A", "away_team": "B",
+        "bookmakers": [{"key": "bet365", "title": "Bet365",
+            "markets": [{"key": "totals",
+                "outcomes": [{"name": "Over", "price": 1.9, "point": 2.5}]}]}]}]
+    p = TheOddsAPIProvider(transport=lambda url, params=None, headers=None: canned)
     assert p.is_available() is True
-    # Mesmo disponivel, fetch_odds ainda levanta CredentialsBlocked porque a
-    # implementacao real exige confirmacao de endpoint (MODO SEGURO). Mas o
-    # guard passa (is_available True).
-    with pytest.raises((CredentialsBlocked,)):
+    odds = p.fetch_odds()
+    assert p._calls == 1
+    assert len(odds) == 1
+    assert odds[0].provider == "the_odds_api"
+    assert odds[0].bookmaker == "Bet365"
+    assert odds[0].market == "totals"
+    assert odds[0].price == 1.9
+    assert odds[0].coleta_tipo == "pre_match"
+
+
+def test_gate_aberto_sem_credencial_bloqueia(gate_aberto, sem_credenciais):
+    # Gate aberto, credencial ausente => bloqueia antes de qualquer rede.
+    def _boom(*a, **k):
+        raise AssertionError("rede nao deve ser chamada sem credencial")
+    p = TheOddsAPIProvider(transport=_boom)
+    with pytest.raises(CredentialsBlocked):
         p.fetch_odds()
+
+
+def test_apifootball_com_parser_cards(gate_aberto, monkeypatch):
+    # Parser de cards[] do get_events: yellow/red contados; ausente => MISSING.
+    monkeypatch.setenv("APIFOOTBALL_COM_API_KEY", "dummy")
+    canned = [{"match_id": "1", "match_hometeam_name": "A",
+               "match_awayteam_name": "B", "match_date": "2026-09-14",
+               "league_name": "X",
+               "cards": [{"time": "10", "card": "yellow"},
+                         {"time": "70", "card": "red"}]}]
+    p = APIFootballComProvider(transport=lambda url, params=None, headers=None: canned)
+    fatos = p.fetch_events("1")
+    reds = [f for f in fatos if f.field == "red_cards"]
+    yels = [f for f in fatos if f.field == "yellow_cards"]
+    assert reds and reds[0].normalized_value == 1
+    assert yels and yels[0].normalized_value == 1
+    # cards ausente => MISSING (null != zero)
+    canned2 = [{"match_id": "2", "match_hometeam_name": "C",
+                "match_awayteam_name": "D"}]
+    p2 = APIFootballComProvider(transport=lambda url, params=None, headers=None: canned2)
+    f2 = [f for f in p2.fetch_events("2") if f.field == "red_cards"]
+    assert f2 and f2[0].normalized_value is None
+    assert f2[0].status == ST_MISSING
 
 
 # ----------------------------------------------------------------------
@@ -342,11 +386,21 @@ def test_fonte_nao_sobrescreve_outra():
 # 12. adapter invalido nao contamina
 # ----------------------------------------------------------------------
 def test_adapter_invalido_nao_contamina(gate_fechado, sem_credenciais):
-    # 5Dollar com endpoints A_CONFIRMAR levanta EndpointNotConfirmed,
-    # NAO inventa dados.
+    # Gate fechado => _guard bloqueia antes de qualquer rede (nao inventa dados).
     p = FiveDollarFootballProvider()
-    with pytest.raises((EndpointNotConfirmed, CredentialsBlocked)):
-        p.fetch_odds()
+    with pytest.raises(CredentialsBlocked):
+        p.fetch_odds(fixture_id=1)
+
+
+def test_fivedollar_endpoints_agora_confirmados(gate_aberto, monkeypatch):
+    # Endpoints confirmados por documentacao; transporte fake => parser rodou.
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "dummy")
+    canned = [{"bookmaker": "bet365", "opening": {"over": 1.9, "line": 9.5}}]
+    p = FiveDollarFootballProvider(transport=lambda url, params=None, headers=None: canned)
+    odds = p.fetch_odds(fixture_id=1, market="corner")
+    assert p._calls == 1
+    assert any(o.provider == "five_dollar_football" for o in odds)
+    assert any(o.market == "corner" for o in odds)
 
 
 def test_endpoint_nao_confirmado_nao_inventa():
@@ -561,3 +615,122 @@ def test_status_canonicos_validos(gate_fechado, sem_credenciais):
         for col, st in cols.items():
             assert "FONTE_RUIM" not in st, f"{p}/{col}: {st}"
             assert st in validos, f"{p}/{col}: {st}"
+
+
+# ----------------------------------------------------------------------
+# 5F-D2: runner real com providers injetados (sem rede)
+# ----------------------------------------------------------------------
+def test_rodar_auditoria_real_com_fakes(gate_aberto, monkeypatch, tmp_path):
+    """rodar_auditoria_real executa smoke+amostra com providers fake; estrutura
+    do relatorio correta; nenhum valor de credencial impresso."""
+    from src.auditoria_multifonte import rodar_auditoria_real
+    monkeypatch.setenv("THE_ODDS_API_KEY", "dummy-aaa")
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "dummy-bbb")
+    monkeypatch.setenv("SPORTMONKS_API_TOKEN", "dummy-ccc")
+    monkeypatch.setenv("APIFOOTBALL_COM_API_KEY", "dummy-ddd")
+    monkeypatch.setenv("FOOTBALL_DATA_API_KEY", "dummy-eee")
+
+    class FakeOdd:
+        def __init__(self, market, bookmaker, price):
+            self.provider = "the_odds_api"; self.bookmaker = bookmaker
+            self.market = market; self.price = price; self.coleta_tipo = "pre_match"
+
+    class _P:
+        def __init__(self, nome): self.provider_name = nome; self._calls = 0
+
+    class FakeTheOdds(_P):
+        def fetch_sports(self): return [{"key": "soccer_epl"}]
+        def fetch_odds(self, *a, **k): return [FakeOdd("totals", "bet365", 1.9)]
+    class Fake5D(_P):
+        def fetch_status(self): return {"status": "ok"}
+        def fetch_fixtures(self, params=None): return [{"id": 1}]
+        def fetch_odds(self, fid, market="corner"): return []
+    class FakeSM(_P):
+        def fetch_leagues(self): return [{"id": 1}]
+        def fetch_fixtures_by_date(self, d): return []
+        def fetch_match(self, mid): return []
+    class FakeAFC(_P):
+        def fetch_competitions(self): return [{"id": 1}]
+        def fetch_events_by_date(self, f, t, league_id=None):
+            return [{"match_id": "9", "match_hometeam_name": "X",
+                     "match_awayteam_name": "Y", "cards": []}]
+    class FakeFD(_P):
+        def fetch_competitions(self): return [{"code": "CL"}]
+        def fetch_matches_by_competition(self, code, dateFrom=None, dateTo=None):
+            return []
+    class FakeSB(_P):
+        def fetch_competitions(self): return [{"competition_id": 9}]
+        def fetch_events(self, mid): return []
+
+    providers = {
+        "the_odds_api": FakeTheOdds("the_odds_api"),
+        "five_dollar_football": Fake5D("five_dollar_football"),
+        "sportmonks": FakeSM("sportmonks"),
+        "apifootball_com": FakeAFC("apifootball_com"),
+        "football_data_org": FakeFD("football_data_org"),
+        "statsbomb_open": FakeSB("statsbomb_open"),
+    }
+    rel = rodar_auditoria_real(providers=providers, raw_dir=str(tmp_path),
+                               date_str="2026-09-10")
+    assert rel["gate_aberto"] is True
+    assert rel["etapa"] == "5F-D2"
+    # todos os smokes registraram OK (fakes nao levantam)
+    assert all(rel["smoke_tests"].values()), rel["smoke_tests"]
+    # chamadas registradas por provider
+    assert rel["chamadas_por_provider"]["the_odds_api"] >= 1
+    assert rel["chamadas_por_provider"]["apifootball_com"] >= 1
+    # the_odds_api observou mercado totals
+    assert "totals" in rel["observacoes"]["the_odds_api"]["mercados_observados"]
+    # nenhum valor de credencial real no JSON do relatorio
+    txt = json.dumps(rel, default=str, ensure_ascii=False)
+    for seg in ("dummy-aaa", "dummy-bbb", "dummy-ccc", "dummy-ddd", "dummy-eee"):
+        assert seg not in txt, "credencial vazada no relatorio"
+
+
+def test_rodar_auditoria_real_gate_fechado(gate_fechado, sem_credenciais):
+    """Gate fechado => runner retorna erro GATE_FECHADO, sem chamadas."""
+    from src.auditoria_multifonte import rodar_auditoria_real
+    rel = rodar_auditoria_real()
+    assert rel["gate_aberto"] is False
+    assert rel["erro"] == "GATE_FECHADO"
+
+
+def test_rodar_auditoria_real_isola_falha_provider(gate_aberto, monkeypatch, tmp_path):
+    """Um provider falhando (404) nao derruba a auditoria toda."""
+    from src.auditoria_multifonte import rodar_auditoria_real
+    monkeypatch.setenv("THE_ODDS_API_KEY", "x")
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "x")
+    monkeypatch.setenv("SPORTMONKS_API_TOKEN", "x")
+    monkeypatch.setenv("APIFOOTBALL_COM_API_KEY", "x")
+    monkeypatch.setenv("FOOTBALL_DATA_API_KEY", "x")
+
+    class BoomSM:
+        provider_name = "sportmonks"; _calls = 0
+        def fetch_leagues(self): raise EndpointNotConfirmed("404")
+        def fetch_fixtures_by_date(self, d): return []
+        def fetch_match(self, mid): return []
+    class OkSB:
+        provider_name = "statsbomb_open"; _calls = 0
+        def fetch_competitions(self): return [{"id": 1}]
+        def fetch_events(self, mid): return []
+    class OkRest:
+        provider_name = "x"; _calls = 0
+        def fetch_sports(self): return []
+        def fetch_odds(self, *a, **k): return []
+        def fetch_status(self): return {}
+        def fetch_fixtures(self, p=None): return []
+        def fetch_competitions(self): return []
+        def fetch_events_by_date(self, f, t, league_id=None): return []
+        def fetch_matches_by_competition(self, c, dateFrom=None, dateTo=None): return []
+    providers = {
+        "the_odds_api": OkRest(), "five_dollar_football": OkRest(),
+        "sportmonks": BoomSM(), "apifootball_com": OkRest(),
+        "football_data_org": OkRest(), "statsbomb_open": OkSB(),
+    }
+    rel = rodar_auditoria_real(providers=providers, raw_dir=str(tmp_path),
+                               date_str="2026-09-10")
+    # sportmonks smoke falhou mas others ok
+    assert rel["smoke_tests"]["sportmonks"] is False
+    assert rel["smoke_tests"]["statsbomb_open"] is True
+    statuses = {c["status"] for c in rel["chamadas"] if c["provider"] == "sportmonks"}
+    assert "ENDPOINT_NAO_CONFIRMADO" in statuses

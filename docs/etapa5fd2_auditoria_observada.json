@@ -1,0 +1,421 @@
+{
+  "etapa": "5F-D2",
+  "timestamp": 1789404895.9383793,
+  "gate_aberto": true,
+  "data_auditada": "2026-09-10",
+  "credenciais": {
+    "api_football": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "the_odds_api": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "five_dollar_football": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "sportmonks": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "apifootball_com": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "football_data_org": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": true
+    },
+    "statsbomb_open": {
+      "credencial_configurada": true,
+      "gate_aberto": true,
+      "chamada_real_autorizada": false
+    }
+  },
+  "candidatos_cache": 12,
+  "candidatos_cache_por_redclass": {
+    "all_null": 0,
+    "all_zero": 8,
+    "has_red": 2,
+    "no_stats": 2
+  },
+  "chamadas": [
+    {
+      "provider": "the_odds_api",
+      "operacao": "smoke_sports",
+      "status": "OK",
+      "latency_ms": 1281.0,
+      "shape": "list[84]"
+    },
+    {
+      "provider": "five_dollar_football",
+      "operacao": "smoke_status",
+      "status": "CREDENCIAL_BLOQUEADA",
+      "erro": "HTTP 401 credencial invalida em https://api.5dollarfootballapi.com/v1/status"
+    },
+    {
+      "provider": "sportmonks",
+      "operacao": "smoke_leagues",
+      "status": "OK",
+      "latency_ms": 1358.0,
+      "shape": "list[4]"
+    },
+    {
+      "provider": "apifootball_com",
+      "operacao": "smoke_leagues",
+      "status": "OK",
+      "latency_ms": 1518.0,
+      "shape": "list[1019]"
+    },
+    {
+      "provider": "football_data_org",
+      "operacao": "smoke_competitions",
+      "status": "FALHA_TECNICA",
+      "erro": "_HTTPError: HTTP 400 em https://api.football-data.org/v4/competitions"
+    },
+    {
+      "provider": "statsbomb_open",
+      "operacao": "smoke_competitions",
+      "status": "OK",
+      "latency_ms": 256.0,
+      "shape": "list[80]"
+    },
+    {
+      "provider": "the_odds_api",
+      "operacao": "odds_ucl",
+      "status": "OK",
+      "latency_ms": 1027.0,
+      "shape": "list[2369]"
+    },
+    {
+      "provider": "apifootball_com",
+      "operacao": "events_by_date",
+      "status": "OK",
+      "latency_ms": 1949.0,
+      "shape": "list[193]"
+    },
+    {
+      "provider": "sportmonks",
+      "operacao": "fixtures_by_date",
+      "status": "OK",
+      "latency_ms": 1114.0,
+      "shape": "list[0]"
+    },
+    {
+      "provider": "statsbomb_open",
+      "operacao": "events_smoke",
+      "status": "OK",
+      "latency_ms": 330.0,
+      "shape": "list[3947]"
+    }
+  ],
+  "chamadas_por_provider": {
+    "the_odds_api": 2,
+    "five_dollar_football": 1,
+    "sportmonks": 2,
+    "apifootball_com": 2,
+    "football_data_org": 1,
+    "statsbomb_open": 2
+  },
+  "chamadas_por_status": {
+    "OK": 8,
+    "CREDENCIAL_BLOQUEADA": 1,
+    "FALHA_TECNICA": 1
+  },
+  "smoke_tests": {
+    "the_odds_api": true,
+    "five_dollar_football": false,
+    "sportmonks": true,
+    "apifootball_com": true,
+    "football_data_org": false,
+    "statsbomb_open": true
+  },
+  "observacoes": {
+    "the_odds_api": {
+      "mercados_observados": {
+        "h2h": 1713,
+        "h2h_lay": 162,
+        "spreads": 72,
+        "totals": 422
+      },
+      "bookmakers_distintos": 32,
+      "n_odds": 2369,
+      "coleta_tipo": "pre_match"
+    },
+    "five_dollar_football": {
+      "odds_corner_observadas": false,
+      "odds_cards_observadas": false,
+      "n_odds_corner": 0,
+      "n_odds_cards": 0,
+      "n_fixtures": 0
+    },
+    "apifootball_com_cards": {
+      "n_events_dia": 193,
+      "n_reconciliados": 6,
+      "matched": 0,
+      "ambiguous": 5,
+      "not_matched": 1,
+      "cache_null_recuperados_zero": 0,
+      "cache_null_recuperados_positivo": 0,
+      "cache_null_sem_cards_field": 0,
+      "concordancia_red_positivo": 2,
+      "conflito_red_divergente": 0,
+      "detalhes": [
+        {
+          "fixture_id_af": 1635632,
+          "fixture_id_afc": "853153",
+          "match_kind": "fuzzy_prefix",
+          "reconciliacao": "AMBIGUOUS",
+          "confianca": 0.6,
+          "home": "Bayern München",
+          "away": "Bodo/Glimt",
+          "af_home": "Bayern Munich",
+          "af_away": "Bodo/Glimt",
+          "league_afc": "UEFA Champions League - League Phase",
+          "cache_red_class": "has_red",
+          "cache_red_sum": 1,
+          "apifootball_com_red": 1,
+          "apifootball_com_has_cards_field": true
+        },
+        {
+          "fixture_id_af": 1635648,
+          "fixture_id_afc": "853169",
+          "match_kind": "exact",
+          "reconciliacao": "AMBIGUOUS",
+          "confianca": 0.8,
+          "home": "Como",
+          "away": "RB Leipzig",
+          "af_home": "Como",
+          "af_away": "RB Leipzig",
+          "league_afc": "UEFA Champions League - League Phase",
+          "cache_red_class": "all_zero",
+          "cache_red_sum": 0,
+          "apifootball_com_red": 0,
+          "apifootball_com_has_cards_field": true
+        },
+        {
+          "fixture_id_af": 1635659,
+          "fixture_id_afc": "853180",
+          "match_kind": "exact",
+          "reconciliacao": "AMBIGUOUS",
+          "confianca": 0.8,
+          "home": "Fenerbahçe",
+          "away": "AS Roma",
+          "af_home": "Fenerbahce",
+          "af_away": "AS Roma",
+          "league_afc": "UEFA Champions League - League Phase",
+          "cache_red_class": "all_zero",
+          "cache_red_sum": 0,
+          "apifootball_com_red": 0,
+          "apifootball_com_has_cards_field": true
+        },
+        {
+          "fixture_id_af": 1635697,
+          "fixture_id_afc": "853218",
+          "match_kind": "fuzzy_prefix",
+          "reconciliacao": "NOT_MATCHED",
+          "confianca": 0.4,
+          "home": "Manchester United",
+          "away": "Sabah FA",
+          "af_home": "Manchester Utd",
+          "af_away": "Sabah Baku",
+          "league_afc": "UEFA Champions League - League Phase",
+          "cache_red_class": "all_zero",
+          "cache_red_sum": 0,
+          "apifootball_com_red": 0,
+          "apifootball_com_has_cards_field": true
+        },
+        {
+          "fixture_id_af": 1611288,
+          "fixture_id_afc": "834478",
+          "match_kind": "fuzzy_prefix",
+          "reconciliacao": "AMBIGUOUS",
+          "confianca": 0.6,
+          "home": "Once Caldas",
+          "away": "Alianza Valledupar",
+          "af_home": "Once Caldas",
+          "af_away": "Alianza",
+          "league_afc": "Copa Colombia - 1/8-finals",
+          "cache_red_class": "no_stats",
+          "cache_red_sum": null,
+          "apifootball_com_red": 0,
+          "apifootball_com_has_cards_field": true
+        },
+        {
+          "fixture_id_af": 1635729,
+          "fixture_id_afc": "853250",
+          "match_kind": "fuzzy_prefix",
+          "reconciliacao": "AMBIGUOUS",
+          "confianca": 0.6,
+          "home": "Slavia Praha",
+          "away": "Lens",
+          "af_home": "Slavia Prague",
+          "af_away": "Lens",
+          "league_afc": "UEFA Champions League - League Phase",
+          "cache_red_class": "has_red",
+          "cache_red_sum": 1,
+          "apifootball_com_red": 1,
+          "apifootball_com_has_cards_field": true
+        }
+      ]
+    },
+    "sportmonks": {
+      "n_fixtures_dia": 0,
+      "n_nome_mapeados": 0,
+      "n_detalhados": 0,
+      "detalhes": []
+    },
+    "football_data_org": {
+      "n_matches_dia": 0,
+      "n_reconciliados": 0,
+      "detalhes": []
+    },
+    "statsbomb_open": {
+      "n_events_smoke": 3947,
+      "publico": true,
+      "live": false,
+      "odds": false
+    },
+    "corners_cross_provider": {
+      "sportmonks_n_fixtures": 0,
+      "sportmonks_status": "LIMITADO_PELO_PLANO (4 ligas menores; 0 fixtures na data)",
+      "apifootball_com_get_statistics": "empty (0 statistics para fixture UCL 853153)",
+      "concordancia_cross_provider": "NAO_AVALIAVEL (nenhuma fonte externa entregou corners na amostra)",
+      "drift_etapa_5c": "EVIDÊNCIA INSUFICIENTE (sem fonte independente de corners observada)"
+    },
+    "credenciais_invalidas": {
+      "five_dollar_football": "HTTP 401 credencial invalida (presente mas rejeitada)",
+      "football_data_org": "HTTP 400 Your API token is invalid (presente mas rejeitada)"
+    }
+  },
+  "conflitos": [],
+  "n_conflitos": 0,
+  "banco_snapshots": {
+    "db_path": "C:\\CornerIntelligence\\data\\corner_intelligence.db",
+    "tabela": "odds_snapshot_history",
+    "total": 317951,
+    "por_provider": {
+      "api_football": 317951
+    },
+    "por_coleta_tipo": {
+      "live": 7053,
+      "pre_match": 310898
+    },
+    "por_status": {
+      "INVALID": 1553,
+      "OK": 39144,
+      "SUSPENDED": 1514,
+      "UNMAPPED": 275740
+    },
+    "hashs_distintos": 317951,
+    "provider_null": 0,
+    "user_version": 2,
+    "integrity_check": "ok"
+  },
+  "matriz_confiabilidade": {
+    "corners": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "cache existente (api_football)",
+      "coverage": "VALIDADO(api_football) / SEM_CREDENCIAL(sportmonks)",
+      "status": "PARCIAL"
+    },
+    "goals": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "cache + open data",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "red_cards": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "Red Cards=null e limitacao estrutural (Etapa 5D)",
+      "coverage": "LIMITADO_PELO_PLANO",
+      "status": "NAO_AVALIAVEL"
+    },
+    "yellow_cards": {
+      "principal": "api_football",
+      "fallback": "sportmonks",
+      "evidencia": "cache existente",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "total_cards": {
+      "principal": "api_football",
+      "fallback": "apifootball_com",
+      "evidencia": "amarelo+vermelho (conv 1/2) ou direto",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "shots": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics + events",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "shots_on_target": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics + events",
+      "coverage": "VALIDADO(api_football,statsbomb_open)",
+      "status": "PARCIAL"
+    },
+    "possession": {
+      "principal": "api_football",
+      "fallback": "statsbomb_open",
+      "evidencia": "/fixtures/statistics",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "odds_pre_match": {
+      "principal": "api_football",
+      "fallback": "the_odds_api",
+      "evidencia": "odds_snapshot_history (317.951)",
+      "coverage": "VALIDADO(api_football) / SEM_CREDENCIAL(the_odds_api)",
+      "status": "PARCIAL"
+    },
+    "odds_live": {
+      "principal": "api_football",
+      "fallback": "the_odds_api",
+      "evidencia": "live 7.053 snapshots",
+      "coverage": "VALIDADO(api_football)",
+      "status": "PARCIAL"
+    },
+    "odds_opening": {
+      "principal": "PRIMEIRO_SNAPSHOT_LOCAL",
+      "fallback": "A_CONFIRMAR",
+      "evidencia": "API nao marca abertura; nao inferir",
+      "coverage": "NAO_INFERIDO",
+      "status": "A_CONFIRMAR"
+    }
+  },
+  "bloqueio": "GATE ABERTO — chamadas reais executadas",
+  "chamadas_session_totals": {
+    "the_odds_api": 7,
+    "five_dollar_football": 3,
+    "sportmonks": 6,
+    "apifootball_com": 7,
+    "football_data_org": 4,
+    "statsbomb_open": 6
+  },
+  "hard_limits": {
+    "the_odds_api": 10,
+    "five_dollar_football": 15,
+    "sportmonks": 15,
+    "apifootball_com": 15,
+    "football_data_org": 10,
+    "statsbomb_open": 30
+  },
+  "dentro_limites": true,
+  "chamadas_totais_sessao": 33
+}

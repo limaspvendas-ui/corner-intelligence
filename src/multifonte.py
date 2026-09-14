@@ -170,6 +170,49 @@ def _cred_configurada(cred_env: str) -> bool:
 
 
 # ----------------------------------------------------------------------
+# Transporte HTTP injetavel (Etapa 5F-D2: chamadas reais)
+# ----------------------------------------------------------------------
+# transport(url, params=None, headers=None, timeout=30) -> parsed JSON.
+# Levanta RateLimitHit(429)/QuotaExhausted(402)/CredentialsBlocked(401,403)/
+# EndpointNotConfirmed(404) conforme o HTTP. Default usa requests.
+# NUNCA imprime credenciais; o valor da chave vai somente no param/header.
+class _HTTPError(RuntimeError):
+    """Erro HTTP nao classificado (status nao mapeado)."""
+
+
+def _default_transport(url, params=None, headers=None, timeout=30):
+    """Transporte real via requests. Nao imprime credenciais."""
+    import requests
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=timeout)
+    except Exception as e:  # rede/DNS/timeout
+        raise _HTTPError(f"rede: {type(e).__name__}") from e
+    base = url.split("?")[0]
+    if r.status_code == 429:
+        raise RateLimitHit(f"HTTP 429 rate-limit em {base}")
+    if r.status_code == 402:
+        raise QuotaExhausted(f"HTTP 402 pagamento/quota em {base}")
+    if r.status_code in (401, 403):
+        raise CredentialsBlocked(f"HTTP {r.status_code} credencial invalida em {base}")
+    if r.status_code == 404:
+        raise EndpointNotConfirmed(f"HTTP 404 endpoint nao confirmado em {base}")
+    if not r.ok:
+        raise _HTTPError(f"HTTP {r.status_code} em {base}")
+    try:
+        return r.json()
+    except Exception:
+        return r.text
+
+
+def _redact(text: str, secrets: list[str]) -> str:
+    """Remove ocorrencias dos valores de credencial de um texto (raw save)."""
+    for s in secrets:
+        if s and len(s) >= 6:
+            text = text.replace(s, "[REDACTED]")
+    return text
+
+
+# ----------------------------------------------------------------------
 # Adapters de ODDS
 # ----------------------------------------------------------------------
 class TheOddsAPIProvider:
@@ -191,8 +234,9 @@ class TheOddsAPIProvider:
     # Hard limit de seguranca por execucao (Phase 22).
     HARD_LIMIT = 10
 
-    def __init__(self) -> None:
+    def __init__(self, transport=None) -> None:
         self._calls = 0
+        self._transport = transport or _default_transport
 
     def is_available(self) -> bool:
         return credenciais_rotacionadas() and _cred_configurada(self.CRED_ENV)
@@ -202,13 +246,51 @@ class TheOddsAPIProvider:
         if self._calls >= self.HARD_LIMIT:
             raise RateLimitHit(f"{self.provider_name}: HARD_LIMIT atingido")
 
-    def fetch_odds(self, sport_key: str = "soccer_epl") -> list[NormalizedOdd]:
-        """Busca odds pre-match. Implementacao real requer gate aberto."""
+    def _get(self, path, params=None):
         self._guard()
-        # Endpoint confirmado por documentacao. Chamada real fica pendente
-        # ate o gate abrir; o parser abaixo segue o shape documentado.
-        raise CredentialsBlocked(
-            f"CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (the_odds_api).")
+        url = f"{self.BASE_URL}{path}"
+        p = dict(params or {})
+        p["apiKey"] = os.getenv(self.CRED_ENV)
+        self._calls += 1
+        return self._transport(url, params=p)
+
+    def fetch_sports(self) -> list[dict]:
+        """GET /sports — lista esportes/ligas acessiveis na conta."""
+        return self._get("/sports")
+
+    def fetch_odds(self, sport_key: str = "soccer_epl",
+                   markets: str = "h2h,totals,spreads,alternate_totals",
+                   regions: str = "eu,uk") -> list[NormalizedOdd]:
+        """GET /sports/{sport_key}/odds — odds pre-match, shape documentado v4.
+
+        Response: [{id, sport_key, commence_time, home_team, away_team,
+        bookmakers:[{key,title,markets:[{key,outcomes:[{name,price,point}]}]}]}].
+        """
+        data = self._get(f"/sports/{sport_key}/odds",
+                         {"regions": regions, "markets": markets,
+                          "oddsFormat": "decimal"})
+        if not isinstance(data, list):
+            return []
+        out: list[NormalizedOdd] = []
+        for ev in data:
+            fid = str(ev.get("id", ""))
+            home = ev.get("home_team"); away = ev.get("away_team")
+            for bm in ev.get("bookmakers", []) or []:
+                bk = bm.get("title") or bm.get("key")
+                for mk in bm.get("markets", []) or []:
+                    market = mk.get("key", "")
+                    for oc in mk.get("outcomes", []) or []:
+                        out.append(NormalizedOdd(
+                            provider=self.provider_name, bookmaker=bk,
+                            fixture_provider_id=fid, fixture_corner_id=None,
+                            market=market, submarket=None,
+                            side=oc.get("name"),
+                            line=oc.get("point"),
+                            price=oc.get("price"),
+                            timestamp=ev.get("commence_time"),
+                            coleta_tipo="pre_match",
+                            status=ST_OK))
+        return out
 
 
 class FiveDollarFootballProvider:
@@ -223,11 +305,16 @@ class FiveDollarFootballProvider:
     provider_name = "five_dollar_football"
     CRED_ENV = "FIVE_DOLLAR_FOOTBALL_API_KEY"
     HARD_LIMIT = 15
-    # Endpoints NAO confirmados neste etapa => A CONFIRMAR (nao inventados).
-    ENDPOINTS_CONFIRMADOS: dict[str, str] = {}
+    # Endpoints confirmados por documentacao oficial (5dollarfootballapi.com/docs):
+    BASE_URL = "https://api.5dollarfootballapi.com/v1"
+    # market values: 1x2, asian, goalline, corner, corner_asian, cards,
+    # cards_asian, asian_half, goalline_half, corner_half, btts
+    MARKETS = ["1x2", "asian", "goalline", "corner", "corner_asian",
+               "cards", "cards_asian", "btts"]
 
-    def __init__(self) -> None:
+    def __init__(self, transport=None) -> None:
         self._calls = 0
+        self._transport = transport or _default_transport
 
     def is_available(self) -> bool:
         return credenciais_rotacionadas() and _cred_configurada(self.CRED_ENV)
@@ -237,12 +324,75 @@ class FiveDollarFootballProvider:
         if self._calls >= self.HARD_LIMIT:
             raise RateLimitHit(f"{self.provider_name}: HARD_LIMIT atingido")
 
-    def fetch_odds(self, *args, **kw) -> list[NormalizedOdd]:
+    def _get(self, path, params=None):
         self._guard()
-        # Endpoints A CONFIRMAR: nao inventa implementacao.
-        raise EndpointNotConfirmed(
-            f"five_dollar_football: endpoints A CONFIRMAR (documentacao/"
-            "resposta real nao comprovados nesta etapa).")
+        url = f"{self.BASE_URL}{path}"
+        headers = {"Authorization": f"Bearer {os.getenv(self.CRED_ENV)}"}
+        self._calls += 1
+        return self._transport(url, params=params, headers=headers)
+
+    def fetch_status(self) -> dict:
+        """GET /status — plano/limites/uso (smoke test ideal)."""
+        return self._get("/status")
+
+    def fetch_fixtures(self, params=None) -> list[dict]:
+        return self._get("/fixtures", params) or []
+
+    def fetch_odds(self, fixture_id, market="corner") -> list[NormalizedOdd]:
+        """GET /fixtures/{id}/odds?market=... — opening/closing/in-play.
+
+        Shape OBSERVADO: a confirmar na resposta real (parser flexivel).
+        market em MARKETS. Documentacao: retorna odds com valores
+        opening/closing/in-play por bookmaker.
+        """
+        data = self._get(f"/fixtures/{fixture_id}/odds", {"market": market})
+        return self._parse_odds(data, fixture_id, market)
+
+    def _parse_odds(self, data, fixture_id, market) -> list[NormalizedOdd]:
+        out: list[NormalizedOdd] = []
+        if not isinstance(data, (list, dict)):
+            return out
+        # Parser flexivel: procura bookmakers/odds em estruturas comuns.
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            bk = item.get("bookmaker") or item.get("bookmaker_slug") or "unknown"
+            # valores opening/closing/in-play podem vir em chaves variadas
+            for phase_key, coleta in (("opening", "pre_match"),
+                                      ("close", "pre_match"),
+                                      ("closing", "pre_match"),
+                                      ("in_play", "live"),
+                                      ("live", "live")):
+                block = item.get(phase_key)
+                if isinstance(block, dict):
+                    for side, price in block.items():
+                        if side in ("line", "point", "handicap"):
+                            continue
+                        if isinstance(price, (int, float)) or price is None:
+                            out.append(NormalizedOdd(
+                                provider=self.provider_name, bookmaker=bk,
+                                fixture_provider_id=str(fixture_id),
+                                fixture_corner_id=None, market=market,
+                                submarket=phase_key, side=str(side),
+                                line=item.get("line") or item.get("point"),
+                                price=price, timestamp=None,
+                                coleta_tipo=coleta,
+                                status=(ST_OK if price is not None else ST_MISSING)))
+            # odds diretas (pre_match flat)
+            if isinstance(item.get("odds"), list):
+                for oc in item["odds"]:
+                    out.append(NormalizedOdd(
+                        provider=self.provider_name, bookmaker=bk,
+                        fixture_provider_id=str(fixture_id),
+                        fixture_corner_id=None, market=market,
+                        submarket=item.get("phase"),
+                        side=str(oc.get("side") or oc.get("name") or ""),
+                        line=oc.get("line") or oc.get("point"),
+                        price=oc.get("price"), timestamp=oc.get("updated_at"),
+                        coleta_tipo="pre_match",
+                        status=(ST_OK if oc.get("price") is not None else ST_MISSING)))
+        return out
 
 
 # ----------------------------------------------------------------------
@@ -262,10 +412,11 @@ class SportmonksProvider:
     provider_name = "sportmonks"
     CRED_ENV = "SPORTMONKS_API_TOKEN"
     HARD_LIMIT = 15
-    BASE_URL = "https://api.sportmonks.com/v3"
+    BASE_URL = "https://api.sportmonks.com/v3/football"
 
-    def __init__(self) -> None:
+    def __init__(self, transport=None) -> None:
         self._calls = 0
+        self._transport = transport or _default_transport
 
     def is_available(self) -> bool:
         return credenciais_rotacionadas() and _cred_configurada(self.CRED_ENV)
@@ -275,42 +426,132 @@ class SportmonksProvider:
         if self._calls >= self.HARD_LIMIT:
             raise RateLimitHit(f"{self.provider_name}: HARD_LIMIT atingido")
 
-    def fetch_competitions(self) -> list[dict]:
+    def _get(self, path, params=None):
         self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (sportmonks).")
+        url = f"{self.BASE_URL}{path}"
+        p = dict(params or {})
+        p["api_token"] = os.getenv(self.CRED_ENV)
+        self._calls += 1
+        return self._transport(url, params=p)
+
+    def fetch_leagues(self) -> list[dict]:
+        """Smoke: GET /leagues?limit=1."""
+        d = self._get("/leagues", {"limit": 1})
+        return d.get("data", []) if isinstance(d, dict) else (d or [])
+
+    def fetch_fixtures_by_date(self, date_str: str) -> list[dict]:
+        """GET /fixtures/between/{date}/{date} — lista basica de fixtures no dia.
+
+        Documentado (docs.sportmonks.com/v3): path params YYYY-MM-DD. Retorna
+        lista com id/nomes/placar/data (sem includes agregados). Use
+        fetch_match(id) para detalhe de cards/corners/statistics.
+        """
+        d = self._get(f"/fixtures/between/{date_str}/{date_str}")
+        return d.get("data", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
 
     def fetch_match(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (sportmonks).")
+        """GET /fixtures/{id}?include=statistics;events;cards;corners;scores."""
+        d = self._get(f"/fixtures/{match_id}",
+                      {"include": "statistics;events;cards;corners;"
+                                  "scores;lineups"})
+        return self._parse(d, match_id)
 
     def fetch_statistics(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (sportmonks).")
+        return self.fetch_match(match_id)
 
     def fetch_events(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (sportmonks).")
+        return self.fetch_match(match_id)
+
+    def _parse(self, d, match_id) -> list[NormalizedFact]:
+        out: list[NormalizedFact] = []
+        if not isinstance(d, dict):
+            return out
+        fx = d.get("data", d)
+        if isinstance(fx, list):
+            fx = fx[0] if fx else {}
+        if not isinstance(fx, dict):
+            return out
+        fid = str(fx.get("id", match_id))
+        # statistics: lista de {type:{name}, data:{...}} por team
+        for stat in fx.get("statistics", []) or []:
+            tname = (stat.get("type") or {}).get("name", "") if isinstance(stat.get("type"), dict) else str(stat.get("type", ""))
+            for side in ("home", "away"):
+                val = (stat.get("data") or {}).get(side) if isinstance(stat.get("data"), dict) else stat.get(side)
+                field = self._map(tname)
+                if field:
+                    out.append(NormalizedFact(
+                        provider=self.provider_name, endpoint="/fixtures",
+                        retrieved_at=0.0, fixture_provider_id=fid,
+                        fixture_corner_id=None, field=f"{field}_{side}",
+                        raw_value=val, normalized_value=self._num(val),
+                        status=(ST_OK if val is not None else ST_MISSING)))
+        # cards: eventos de cartao
+        cards = fx.get("cards", []) or []
+        yell = red = None
+        if isinstance(cards, list):
+            for c in cards:
+                ct = (c.get("type") or c.get("card_type") or "")
+                if isinstance(ct, dict):
+                    ct = ct.get("name", "")
+                ct = str(ct).lower()
+                if "red" in ct: red = (red or 0) + 1
+                elif "yellow" in ct: yell = (yell or 0) + 1
+            has = bool(cards)
+            for field, val in (("yellow_cards", yell), ("red_cards", red)):
+                out.append(NormalizedFact(
+                    provider=self.provider_name, endpoint="/fixtures",
+                    retrieved_at=0.0, fixture_provider_id=fid,
+                    fixture_corner_id=None, field=field,
+                    raw_value=cards, normalized_value=(val if has else None),
+                    status=(ST_OK if has else ST_MISSING)))
+        return out
+
+    @staticmethod
+    def _map(t):
+        t = (t or "").lower()
+        if "corner" in t: return "corners"
+        if "yellow" in t: return "yellow_cards"
+        if "red" in t: return "red_cards"
+        if "shot" in t and "on" in t: return "shots_on_target"
+        if "shot" in t: return "shots"
+        if "possession" in t: return "possession"
+        if "blocked" in t: return "blocked_shots"
+        if "goal" in t: return "goals"
+        return None
+
+    @staticmethod
+    def _num(v):
+        if v is None: return None
+        s = str(v).replace("%", "").strip()
+        try: return int(s)
+        except ValueError:
+            try: return float(s)
+            except ValueError: return None
 
 
 class APIFootballComProvider:
-    """Adapter APIFootball.com (apifootball.com).
+    """Adapter APIFootball.com (apiv3.apifootball.com).
 
     IMPORTANTE: NAO confundir com API-Football / API-Sports (api-sports.io).
     Provider canonico: apifootball_com (distinto de api_football em todo
     codigo, banco, relatorio e logs).
 
-    DOCUMENTADO vs OBSERVADO: A CONFIRMAR. Endpoints publicados incluem
-    ?action=get_fixtures, ?action=get_events, ?action=get_statistics,
-    ?action=get_H2H, com APIkey=... . Confirmacao real exige chamada
-    autenticada (gate fechado => NAO TESTADA).
+    DOCUMENTADO (apifootball.com/documentation):
+      - Base: https://apiv3.apifootball.com/
+      - Auth: query param APIkey=...
+      - ?action=get_events&match_id=...   (cards[], goalscorer[], statistics[])
+      - ?action=get_statistics&match_id=... (statistics[]: {type,home,away})
+      - ?action=get_odds&match_id=...
+    OBSERVADO: A CONFIRMAR na resposta real (parser flexivel).
     """
     provider_name = "apifootball_com"
     CRED_ENV = "APIFOOTBALL_COM_API_KEY"
     HARD_LIMIT = 15
-    BASE_URL = "https://apifootball.com/api"
+    BASE_URL = "https://apiv3.apifootball.com"
 
-    def __init__(self) -> None:
+    def __init__(self, transport=None) -> None:
         self._calls = 0
+        self._transport = transport or _default_transport
 
     def is_available(self) -> bool:
         return credenciais_rotacionadas() and _cred_configurada(self.CRED_ENV)
@@ -320,21 +561,125 @@ class APIFootballComProvider:
         if self._calls >= self.HARD_LIMIT:
             raise RateLimitHit(f"{self.provider_name}: HARD_LIMIT atingido")
 
+    def _call(self, action, extra=None):
+        self._guard()
+        params = {"action": action, "APIkey": os.getenv(self.CRED_ENV)}
+        if extra:
+            params.update(extra)
+        self._calls += 1
+        return self._transport(self.BASE_URL + "/", params=params)
+
     def fetch_competitions(self) -> list[dict]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (apifootball_com).")
+        return self._call("get_leagues") or []
 
-    def fetch_match(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (apifootball_com).")
+    def fetch_events_by_date(self, from_d: str, to_d: str,
+                             league_id: str | None = None) -> list[dict]:
+        """get_events com from/to (yyyy-mm-dd) — retorna todas as partidas no
+        intervalo, cada uma com cards[] (card: 'yellow card'/'red card').
 
-    def fetch_statistics(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (apifootball_com).")
+        Documentado (apifootball.com/documentation): from, to, league_id
+        (opcional). NAO inventa campos; parser flexivel em fetch_events.
+        """
+        extra = {"from": from_d, "to": to_d}
+        if league_id:
+            extra["league_id"] = league_id
+        data = self._call("get_events", extra)
+        return data if isinstance(data, list) else ([] if data is None else [data])
 
     def fetch_events(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (apifootball_com).")
+        """get_events — inclui cards[] (Yellow/Red por evento)."""
+        data = self._call("get_events", {"match_id": match_id})
+        if not isinstance(data, list):
+            data = [data] if isinstance(data, dict) else []
+        out: list[NormalizedFact] = []
+        for ev in data:
+            if not isinstance(ev, dict):
+                continue
+            fid = str(ev.get("match_id", match_id))
+            home = ev.get("match_hometeam_name")
+            away = ev.get("match_awayteam_name")
+            # cards[]: {time, card: "yellow"/"red", ...}
+            yell = red = None
+            for c in ev.get("cards", []) or []:
+                ct = (c.get("card") or c.get("card_type") or "").lower()
+                if "red" in ct:
+                    red = (red or 0) + 1
+                elif "yellow" in ct:
+                    yell = (yell or 0) + 1
+            # se cards[] existir mas vazio => zero explicito; se ausente => None
+            has_cards = "cards" in ev
+            out.append(NormalizedFact(
+                provider=self.provider_name, endpoint="get_events",
+                retrieved_at=0.0, fixture_provider_id=fid,
+                fixture_corner_id=None, home=home, away=away,
+                kickoff=ev.get("match_date"),
+                competition=ev.get("league_name"),
+                field="yellow_cards",
+                raw_value=ev.get("cards"),
+                normalized_value=(yell if has_cards else None),
+                status=(ST_OK if has_cards else ST_MISSING)))
+            out.append(NormalizedFact(
+                provider=self.provider_name, endpoint="get_events",
+                retrieved_at=0.0, fixture_provider_id=fid,
+                fixture_corner_id=None, home=home, away=away,
+                kickoff=ev.get("match_date"),
+                competition=ev.get("league_name"),
+                field="red_cards",
+                raw_value=ev.get("cards"),
+                normalized_value=(red if has_cards else None),
+                status=(ST_OK if has_cards else ST_MISSING)))
+        return out
+
+    def fetch_statistics(self, match_id: str) -> list[NormalizedFact]:
+        """get_statistics — statistics[]: {type, home, away}."""
+        data = self._call("get_statistics", {"match_id": match_id})
+        out: list[NormalizedFact] = []
+        # shape: {match_id: {statistics:[...], player_statistics:[...]}}
+        block = data
+        if isinstance(data, dict) and match_id in data:
+            block = data[match_id]
+        stats = (block or {}).get("statistics", []) if isinstance(block, dict) else []
+        for s in stats or []:
+            t = s.get("type", "")
+            for side in ("home", "away"):
+                v = s.get(side)
+                field = self._map_stat(t)
+                if field:
+                    out.append(NormalizedFact(
+                        provider=self.provider_name, endpoint="get_statistics",
+                        retrieved_at=0.0, fixture_provider_id=str(match_id),
+                        fixture_corner_id=None, field=f"{field}_{side}",
+                        raw_value=v, normalized_value=self._num(v),
+                        status=(ST_OK if v is not None else ST_MISSING)))
+        return out
+
+    def fetch_match(self, match_id: str) -> list[NormalizedFact]:
+        return self.fetch_events(match_id)
+
+    @staticmethod
+    def _map_stat(t):
+        t = (t or "").lower()
+        if "corner" in t: return "corners"
+        if "shot" in t and "on" not in t and "goal" not in t: return "shots"
+        if "shot on target" in t or ("shot" in t and "on" in t): return "shots_on_target"
+        if "possession" in t: return "possession"
+        if "yellow" in t: return "yellow_cards"
+        if "red" in t: return "red_cards"
+        if "goal" in t: return "goals"
+        if "blocked" in t: return "blocked_shots"
+        return None
+
+    @staticmethod
+    def _num(v):
+        if v is None: return None
+        s = str(v).replace("%", "").strip()
+        try:
+            return int(s)
+        except ValueError:
+            try:
+                return float(s)
+            except ValueError:
+                return None
 
 
 class FootballDataOrgProvider:
@@ -355,8 +700,9 @@ class FootballDataOrgProvider:
     HARD_LIMIT = 10
     BASE_URL = "https://api.football-data.org/v4"
 
-    def __init__(self) -> None:
+    def __init__(self, transport=None) -> None:
         self._calls = 0
+        self._transport = transport or _default_transport
 
     def is_available(self) -> bool:
         return credenciais_rotacionadas() and _cred_configurada(self.CRED_ENV)
@@ -366,13 +712,61 @@ class FootballDataOrgProvider:
         if self._calls >= self.HARD_LIMIT:
             raise RateLimitHit(f"{self.provider_name}: HARD_LIMIT atingido")
 
-    def fetch_competitions(self) -> list[dict]:
+    def _get(self, path, params=None):
         self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (football_data_org).")
+        url = f"{self.BASE_URL}{path}"
+        headers = {"X-Auth-Token": os.getenv(self.CRED_ENV)}
+        self._calls += 1
+        return self._transport(url, params=params, headers=headers)
+
+    def fetch_competitions(self) -> list[dict]:
+        """Smoke: GET /competitions."""
+        d = self._get("/competitions")
+        return d.get("competitions", []) if isinstance(d, dict) else (d or [])
+
+    def fetch_matches_by_competition(self, code: str,
+                                     dateFrom: str | None = None,
+                                     dateTo: str | None = None) -> list[dict]:
+        """GET /competitions/{code}/matches?dateFrom=&dateTo= — identidade/
+        placar/status por competicao. Sem corners/cards (nao oferecidos).
+
+        Documentado (football-data.org v4): code ex. 'PL','CL','PD','SA','BL1'.
+        """
+        params = {}
+        if dateFrom and dateTo:
+            params = {"dateFrom": dateFrom, "dateTo": dateTo}
+        d = self._get(f"/competitions/{code}/matches", params=params or None)
+        if isinstance(d, dict):
+            return d.get("matches", [])
+        return d if isinstance(d, list) else []
 
     def fetch_match(self, match_id: str) -> list[NormalizedFact]:
-        self._guard()
-        raise CredentialsBlocked("CHAMADAS REAIS BLOQUEADAS POR SEGURANCA (football_data_org).")
+        """GET /matches/{id} — identidade/placar/status. Sem corners/cards."""
+        d = self._get(f"/matches/{match_id}")
+        out: list[NormalizedFact] = []
+        if not isinstance(d, dict):
+            return out
+        m = d
+        home = (m.get("homeTeam") or {}).get("name")
+        away = (m.get("awayTeam") or {}).get("name")
+        comp = (m.get("competition") or {}).get("name")
+        sc = m.get("score") or {}
+        ft = sc.get("fullTime") or {}
+        ht = sc.get("halfTime") or {}
+        for field, val in (("score_ft_home", ft.get("home")),
+                           ("score_ft_away", ft.get("away")),
+                           ("score_ht_home", ht.get("home")),
+                           ("score_ht_away", ht.get("away")),
+                           ("status", m.get("status")),
+                           ("kickoff", (m.get("utcDate")))):
+            out.append(NormalizedFact(
+                provider=self.provider_name, endpoint=f"/matches/{match_id}",
+                retrieved_at=0.0, fixture_provider_id=str(match_id),
+                fixture_corner_id=None, home=home, away=away,
+                kickoff=m.get("utcDate"), competition=comp,
+                field=field, raw_value=val, normalized_value=val,
+                status=(ST_OK if val is not None else ST_MISSING)))
+        return out
 
     def fetch_statistics(self, match_id: str) -> list[NormalizedFact]:
         # football-data.org NAO oferece stats de corners/cards/shots.
