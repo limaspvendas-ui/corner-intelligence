@@ -538,6 +538,7 @@ def cmd_oddscoleta(args: argparse.Namespace) -> str:
       status  -- estado do odds_snapshot_history (append-only).
       cache   -- ingere as odds JA existentes no api_cache (0 chamadas a API).
       coleta  -- coleta UM fixture na API (/odds; +/odds/live com --live).
+      multiprovider -- coleta prospectiva 5Dollar/The Odds API (Etapa 5F-E2).
 
     AUTO DESABILITADO por padrao: a coleta periodica exige --intervalo > 0
     e --max-iter; sem eles e one-shot. Mercado irreconhecivel => UNMAPPED;
@@ -546,6 +547,7 @@ def cmd_oddscoleta(args: argparse.Namespace) -> str:
         OddsSnapshotStore,
         coletar_fixture,
         coletar_periodico,
+        coletar_multiprovider,
         format_status,
         ingerir_cache,
     )
@@ -593,7 +595,37 @@ def cmd_oddscoleta(args: argparse.Namespace) -> str:
             f"preservado (odds_snapshot_history)."
         )
 
-    return "Subcomando desconhecido. Use: status, cache ou coleta."
+    if sub == "multiprovider":
+        # Etapa 5F-E2: coleta prospectiva 5Dollar / The Odds API.
+        # Respeita HARD_LIMIT do adapter; 402/403/429 => STOP (nunca compra).
+        # Nao altera motor de decisao.
+        prov = args.provider
+        r = coletar_multiprovider(
+            prov, store,
+            fixture_id_int=getattr(args, "fixture", None),
+            sport_key=getattr(args, "sport_key", "soccer_epl"),
+            market=getattr(args, "market", "corner"),
+        )
+        if r.get("erro"):
+            return (
+                f"[FATO] coleta multiprovider '{prov}' interrompida: "
+                f"{r.get('limite') or 'erro'} -> {r['erro']}. "
+                f"Plano/limite respeitado (sem compra, sem re-tenta). "
+                f"Historico append-only preservado."
+            )
+        return (
+            f"[FATO] coleta prospectiva multiprovider '{prov}': "
+            f"{r['snapshots']} snapshots | {r['inseridos']} inseridos | "
+            f"{r['duplicados']} duplicados | consumo API "
+            f"{r['consumo_api']} chamada(s).\n"
+            f"  por market_canonical: {r.get('por_market_canonical', {})}\n"
+            f"  por phase: {r.get('por_phase', {})}\n"
+            f"  por bookmaker: {r.get('por_bookmaker', {})}\n"
+            f"  Historico append-only preservado (odds_snapshot_history). "
+            f"[CALCULO] Etapa 6: BLOQUEADA."
+        )
+
+    return "Subcomando desconhecido. Use: status, cache, coleta ou multiprovider."
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -822,6 +854,21 @@ def build_parser() -> argparse.ArgumentParser:
                             "padrao 0 = one-shot)")
     p_col.add_argument("--max-iter", type=int, default=None,
                        help="limite de passadas (periodica; exige --intervalo>0)")
+    # Etapa 5F-E2: coleta prospectiva multiprovider (5Dollar + The Odds API)
+    p_mp = sp.add_parser(
+        "multiprovider",
+        help="Etapa 5F-E2: coleta prospectiva 5Dollar/The Odds API "
+             "(append-only, separada do motor; sem ROI)")
+    p_mp.add_argument("--provider", required=True,
+                      choices=["five_dollar_football", "the_odds_api"],
+                      help="provider de odds a coletar")
+    p_mp.add_argument("--fixture", type=int, default=None,
+                      help="fixture_id interno (5Dollar exige)")
+    p_mp.add_argument("--market", default="corner",
+                      help="mercado 5Dollar (corner/corner_asian/goalline/"
+                           "cards/cards_asian/asian/1x2/btts)")
+    p_mp.add_argument("--sport-key", default="soccer_epl",
+                      help="sport_key The Odds API (default soccer_epl)")
     p.set_defaults(fn=cmd_oddscoleta)
 
     return parser

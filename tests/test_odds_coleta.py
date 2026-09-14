@@ -734,7 +734,8 @@ def test_migracao_idempotente(tmp_path):
     ).fetchall()
     user_ver2 = sqlite3.connect(str(db)).execute("PRAGMA user_version").fetchone()[0]
     assert estado1 == estado2          # nenhum hash/provider reprocessado
-    assert user_ver1 == user_ver2 == 2
+    # 5F-C (multiprovider -> 2) + 5F-E2 (phase/canonical -> 4): idempotente.
+    assert user_ver1 == user_ver2 == 4
 
 
 # --- 14. repetir inicializacao nao altera banco ---
@@ -776,10 +777,10 @@ def test_rollback_preserva_db_em_falha(tmp_path, monkeypatch):
         "SELECT id, snapshot_hash, odd, fixture_id FROM odds_snapshot_history "
         "ORDER BY id").fetchall()
     assert antes == depois  # rollback desfez todos os UPDATEs de hash
-    # reinicializacao sem falha conclui a migracao
+    # reinicializacao sem falha conclui a migracao (5F-C -> 2 + 5F-E2 -> 4)
     OddsSnapshotStore(db_path=str(db))
     con = sqlite3.connect(str(db))
-    assert con.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert con.execute("PRAGMA user_version").fetchone()[0] == 4
     assert con.execute("SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0] == 3
     con.close()
 
