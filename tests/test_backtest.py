@@ -463,22 +463,19 @@ def test_resultado_experimental(synth):
 
 
 def test_pressao_nao_avaliavel():
-    """FASE N/D: PRESSAO 5/10/15 = AINDA NAO AVALIAVEL (sem
-    live_snapshot_history). O engine modo PRESSAO nao gera previsoes."""
+    """FASE N/D: PRESSAO 5/10/15 = AINDA NAO AVALIAVEL. O engine modo
+    PRESSAO nao gera previsoes -- o motor nao esta conectado a serie temporal
+    live, mesmo que a macroetapa de evidencia materialize live_snapshot_history
+    (append-only) no DB real para coleta."""
     idx = CacheIndex(db_path="data/corner_intelligence.db")
     idx.load()
     cfg = BacktestConfig(modo="PRESSAO")
     eng = BacktestEngine(idx, cfg)
     consid, _ = eng._fixtures_alvo()
     assert consid == []
-    # confirmar: tabela live_snapshot_history nao existe no cache
-    with sqlite3.connect("data/corner_intelligence.db") as c:
-        try:
-            c.execute("SELECT COUNT(*) FROM live_snapshot_history")
-            exists = True
-        except sqlite3.OperationalError:
-            exists = False
-    assert not exists, "live_snapshot_history nao deveria existir"
+    # A protecao do motor e consid == [] (modo PRESSAO nao gera previsoes).
+    # A macroetapa pode criar live_snapshot_history no DB real; isso NAO conecta
+    # o motor -- a tabela de evidencia e independente do engine decisorio.
 
 
 # ----------------------------------------------------------------------

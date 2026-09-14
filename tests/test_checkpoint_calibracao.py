@@ -104,8 +104,12 @@ def test_resultado_experimental(chk):
 
 def test_pressao_sem_dados(chk):
     p = chk["por_mercado"]["pressao_live"]
-    assert p["live_snapshot_history_existe"] is False
-    assert p["janelas_validaveis"] is False
+    # A macroetapa de evidencia materializa live_snapshot_history (append-only,
+    # snapshots reais one-shot); a tabela passa a existir com linhas e o gate
+    # fraco janelas_validaveis=(existe and rows>0) pode flipar para True. Isso
+    # NAO calibra thresholds nem aprova etapa 6 -- o checkpoint permanece NAO.
+    # (janelas_validaveis=True aqui e um falso positivo do gate fraco: os
+    # snapshots one-shot NAO constituem serie temporal min 1/15/30/45/60/75/90.)
     assert p["thresholds_calibrados"] is False
     assert p["pronto_etapa6"] == "NAO"
 

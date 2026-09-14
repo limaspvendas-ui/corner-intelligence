@@ -347,7 +347,13 @@ class FiveDollarFootballProvider:
         return self._get("/status")
 
     def fetch_fixtures(self, params=None) -> list[dict]:
-        return self._get("/fixtures", params) or []
+        """GET /v1/fixtures -- params start_time/end_time (unix UTC, janela
+        <=24h). Resposta real: {success, data:[...], pagination}; retorna a
+        lista de fixtures (desembrulha 'data'), nunca o dict bruto."""
+        data = self._get("/fixtures", params)
+        if isinstance(data, dict):
+            data = data.get("data")
+        return data or []
 
     def fetch_odds(self, fixture_id, market="corner") -> list[NormalizedOdd]:
         """GET /fixtures/{id}/odds?market=... — opening/closing/in-play.

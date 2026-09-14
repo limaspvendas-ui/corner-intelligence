@@ -470,6 +470,25 @@ def test_endpoint_nao_confirmado_nao_inventa():
     assert issubclass(EndpointNotConfirmed, RuntimeError)
 
 
+def test_fivedollar_fetch_fixtures_desembrulha_data(gate_aberto, monkeypatch):
+    # Resposta real do GET /v1/fixtures: {success, data:[...], pagination}.
+    # fetch_fixtures deve retornar a lista (data), nao o dict bruto -- caso
+    # contrario os blocos que iteram isinstance(list) veem 0 fixtures.
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "dummy")
+    canned = {"success": True, "data": [
+        {"id": 10, "league": {}, "teams": {}, "status": "finished"},
+        {"id": 11, "league": {}, "teams": {}, "status": "scheduled"},
+    ], "pagination": {}}
+    p = FiveDollarFootballProvider(transport=lambda url, params=None, headers=None: canned)
+    fx = p.fetch_fixtures({"start_time": 1, "end_time": 1 + 86400})
+    assert isinstance(fx, list)
+    assert len(fx) == 2
+    assert fx[0]["id"] == 10
+    # transport devolvendo lista direta (backward-compat) tambem funciona
+    p2 = FiveDollarFootballProvider(transport=lambda url, params=None, headers=None: [{"id": 1}])
+    assert p2.fetch_fixtures() == [{"id": 1}]
+
+
 # ----------------------------------------------------------------------
 # 13. payload invalido nao vira factual
 # ----------------------------------------------------------------------
