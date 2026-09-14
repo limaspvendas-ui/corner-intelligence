@@ -205,10 +205,21 @@ def _default_transport(url, params=None, headers=None, timeout=30):
 
 
 def _redact(text: str, secrets: list[str]) -> str:
-    """Remove ocorrencias dos valores de credencial de um texto (raw save)."""
+    """Remove ocorrencias dos valores de credencial de um texto (raw save).
+
+    Redact tambem PREFIXOS de credencial: provedores como 5Dollar retornam
+    ``data.key.prefix`` (ex. ``fb_live_xxxx``) na resposta de /status — apenas
+    o valor completo nao basta. Redact (a) o valor completo, (b) os 12 primeiros
+    caracteres de cada segredo longo, e (c) o padrao ``fb_live_<alnum>``.
+    """
+    import re as _re
     for s in secrets:
         if s and len(s) >= 6:
             text = text.replace(s, "[REDACTED]")
+            if len(s) >= 12:
+                text = text.replace(s[:12], "[REDACTED]")
+    # padrao de prefixo 5Dollar (fb_live_ + run alfanumerica)
+    text = _re.sub(r"fb_live_[A-Za-z0-9_-]{4,}", "[REDACTED]", text)
     return text
 
 
@@ -341,33 +352,81 @@ class FiveDollarFootballProvider:
     def fetch_odds(self, fixture_id, market="corner") -> list[NormalizedOdd]:
         """GET /fixtures/{id}/odds?market=... — opening/closing/in-play.
 
-        Shape OBSERVADO: a confirmar na resposta real (parser flexivel).
-        market em MARKETS. Documentacao: retorna odds com valores
-        opening/closing/in-play por bookmaker.
+        Shape OBSERVADO na conta real (5F-D2C, fixture 2062437761, mercado
+        corner): ``{success, data:{fixture_id, bookmakers:[{name, slug,
+        odds:{<market_key>:{opening:{line,over,under}, closing:{...},
+        inplay:{...}}}}]}}``. Cada bloco de mercado tem fases
+        opening/closing/inplay; cada fase tem ``line`` + lados (over/under para
+        totais, home/draw/away para 1x2, home/away para asian, yes/no para
+        btts). market em MARKETS.
         """
         data = self._get(f"/fixtures/{fixture_id}/odds", {"market": market})
         return self._parse_odds(data, fixture_id, market)
+
+    # fases observadas -> coleta_tipo
+    _PHASE_MAP = (("opening", "pre_match"), ("close", "pre_match"),
+                  ("closing", "pre_match"), ("in_play", "live"),
+                  ("inplay", "live"), ("live", "live"))
+    # chaves que sao metadados de linha, nao lados apostaveis
+    _LINE_KEYS = ("line", "point", "handicap", "h")
 
     def _parse_odds(self, data, fixture_id, market) -> list[NormalizedOdd]:
         out: list[NormalizedOdd] = []
         if not isinstance(data, (list, dict)):
             return out
-        # Parser flexivel: procura bookmakers/odds em estruturas comuns.
+
+        # Shape OBSERVADO: {success, data:{bookmakers:[...]}}
+        # Desembrulha ate achar a lista de bookmakers.
+        root = data
+        if isinstance(root, dict) and isinstance(root.get("data"), dict) \
+                and isinstance(root["data"].get("bookmakers"), list):
+            root = root["data"]
+
+        bks = root.get("bookmakers") if isinstance(root, dict) else None
+        if isinstance(bks, list):
+            # Caminho observado: data.bookmakers[].odds[<mk_key>][<phase>][<side>]
+            for bk_obj in bks:
+                if not isinstance(bk_obj, dict):
+                    continue
+                bk = bk_obj.get("name") or bk_obj.get("slug") or "unknown"
+                odds_blk = bk_obj.get("odds")
+                if not isinstance(odds_blk, dict):
+                    continue
+                for mk_key, mk_block in odds_blk.items():
+                    if not isinstance(mk_block, dict):
+                        continue
+                    for phase_key, coleta in self._PHASE_MAP:
+                        phase = mk_block.get(phase_key)
+                        if not isinstance(phase, dict):
+                            continue
+                        line = phase.get("line") or phase.get("point") \
+                            or phase.get("handicap")
+                        for side, price in phase.items():
+                            if side in self._LINE_KEYS:
+                                continue
+                            if isinstance(price, (int, float)) or price is None:
+                                out.append(NormalizedOdd(
+                                    provider=self.provider_name, bookmaker=bk,
+                                    fixture_provider_id=str(fixture_id),
+                                    fixture_corner_id=None, market=market,
+                                    submarket=f"{mk_key}/{phase_key}",
+                                    side=str(side), line=line, price=price,
+                                    timestamp=None, coleta_tipo=coleta,
+                                    status=(ST_OK if price is not None
+                                            else ST_MISSING)))
+            return out
+
+        # Fallback flexivel (shape flat alternativo, nao observado nesta conta).
         items = data if isinstance(data, list) else [data]
         for item in items:
             if not isinstance(item, dict):
                 continue
             bk = item.get("bookmaker") or item.get("bookmaker_slug") or "unknown"
-            # valores opening/closing/in-play podem vir em chaves variadas
-            for phase_key, coleta in (("opening", "pre_match"),
-                                      ("close", "pre_match"),
-                                      ("closing", "pre_match"),
-                                      ("in_play", "live"),
-                                      ("live", "live")):
+            for phase_key, coleta in self._PHASE_MAP:
                 block = item.get(phase_key)
                 if isinstance(block, dict):
                     for side, price in block.items():
-                        if side in ("line", "point", "handicap"):
+                        if side in self._LINE_KEYS:
                             continue
                         if isinstance(price, (int, float)) or price is None:
                             out.append(NormalizedOdd(
@@ -378,8 +437,8 @@ class FiveDollarFootballProvider:
                                 line=item.get("line") or item.get("point"),
                                 price=price, timestamp=None,
                                 coleta_tipo=coleta,
-                                status=(ST_OK if price is not None else ST_MISSING)))
-            # odds diretas (pre_match flat)
+                                status=(ST_OK if price is not None
+                                        else ST_MISSING)))
             if isinstance(item.get("odds"), list):
                 for oc in item["odds"]:
                     out.append(NormalizedOdd(
@@ -391,7 +450,8 @@ class FiveDollarFootballProvider:
                         line=oc.get("line") or oc.get("point"),
                         price=oc.get("price"), timestamp=oc.get("updated_at"),
                         coleta_tipo="pre_match",
-                        status=(ST_OK if oc.get("price") is not None else ST_MISSING)))
+                        status=(ST_OK if oc.get("price") is not None
+                                else ST_MISSING)))
         return out
 
 

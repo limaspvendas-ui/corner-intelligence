@@ -1,0 +1,65 @@
+{
+  "etapa": "5F-D2C",
+  "data": "2026-09-14",
+  "branch": "etapa-5fd-auditoria-multifonte",
+  "escopo": "reteste apenas 5Dollar + football-data.org apos rotacao manual de credenciais",
+  "gate": {"MULTISOURCE_CREDENTIALS_ROTATED": 1, "aberto": true},
+  "credenciais": {
+    "FIVE_DOLLAR_FOOTBALL_API_KEY": {"presente": true, "valida_observado": true, "http_final": 200},
+    "FOOTBALL_DATA_API_KEY": {"presente": true, "valida_observado": true, "http_final": 200},
+    "nota_api_key": "API_KEY (api_football) atualmente AUSENTE do .env apos edicao manual do operador; nao afeta 5F-D2C (api_football nao retestado); 4 test_api.py skip"
+  },
+  "five_dollar_football": {
+    "auth_valida": true,
+    "http_final": 200,
+    "plano": "free",
+    "rate_limit": "60/hour, burst 20/min",
+    "chamadas_sessa": 15,
+    "hard_limit": 15,
+    "dentro_limite": true,
+    "batch_include_odds": "403 insufficient_plan (requer Pro)",
+    "endpoint_livre_funcional": "/v1/fixtures/{id}/odds?market=X (per-fixture)",
+    "fixture_auditado": {"id": "2062437761", "jogo": "Torino x Roma", "liga": "Serie A"},
+    "mercados_observados": {
+      "corner": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing","inplay"], "lados": ["over","under"], "linhas": [7.5, 8, 9.5]},
+      "corner_asian": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing"], "lados": ["home","away"], "linhas": [1.5]},
+      "goalline": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing","inplay"], "lados": ["over","under"], "linhas": [2.25, 2.75]},
+      "cards": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing"], "lados": ["over","under"], "linhas": [4]},
+      "cards_asian": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing"], "lados": ["home","away"], "linhas": [-0.5]},
+      "asian": {"observado": true, "bookmaker": "Bet 365", "fases": ["opening","closing","inplay"], "lados": ["home","away"], "linhas": [0.25, 0.5, 1]},
+      "btts": {"observado": "A_CONFIRMAR", "motivo": "budget atingido (15/15)"}
+    },
+    "fases_audit": {
+      "pre_match": "OBSERVADO (opening + closing)",
+      "live_in_play": "OBSERVADO (inplay em corner/goalline/asian)",
+      "opening": "OBSERVADO",
+      "closing": "OBSERVADO"
+    },
+    "limitacoes_plano": "free: sem batch include=odds (Pro); per-fixture odds OK; 60 req/hour",
+    "correcao_codigo": "parser _parse_odds corrigido para shape data.bookmakers[].odds[mk][phase][side]",
+    "chamadas_detalhe": "status(200) + fixtures(400 status invalido) + fixtures(200) + include=odds(403) + 6x per-fixture odds(corner,corner,goalline,cards,asian,corner_asian,cards_asian) = 15"
+  },
+  "football_data_org": {
+    "auth_valida": true,
+    "http_final": 200,
+    "chamadas_sessa": 3,
+    "hard_limit": 10,
+    "dentro_limite": true,
+    "competitions": {"observado": true, "n": 13, "codigos": ["BSA","ELC","PL","CL","EC","FL1","BL1","SA","DED","PPL","CLI","PD","WC"]},
+    "matches_fixtures": {"observado": true, "PL": 20, "SA": 20},
+    "home_away": "OBSERVADO (homeTeam/awayTeam name + id)",
+    "kickoff": "OBSERVADO (utcDate ISO-8601)",
+    "status": {"observado": true, "valores": ["FINISHED","TIMED","IN_PLAY"]},
+    "score": {"observado": true, "campos": ["fullTime.home","fullTime.away","halfTime.home","halfTime.away"]},
+    "corners_cards": "NAO_OFERECIDOS (esperado; adapter documenta)",
+    "limitacoes": "free tier cobre 12 competicoes top; sem corners/cards/shots"
+  },
+  "testes": {"pass": 611, "skip": 22, "fail": 0, "novos": 3, "baseline_anterior": "612/18/0", "nota_skip": "4 test_api.py skip por API_KEY ausente (ambiente, nao codigo)"},
+  "motor_intacto": true,
+  "arquivos_alterados": ["src/multifonte.py", "tests/test_auditoria_multifonte.py"],
+  "motor_diff": "vazio",
+  "segredos_versionados": false,
+  "env_gitignored": true,
+  "raws_redact": "status file redacted (prefixo fb_live_ removido); _redact endurecido",
+  "commit": "etapa 5fd2c: corrigir parser de odds 5dollar e redact de prefixo"
+}

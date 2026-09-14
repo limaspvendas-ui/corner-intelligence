@@ -403,6 +403,69 @@ def test_fivedollar_endpoints_agora_confirmados(gate_aberto, monkeypatch):
     assert any(o.market == "corner" for o in odds)
 
 
+def test_fivedollar_parse_odds_shape_observado_5fd2c(gate_aberto, monkeypatch):
+    # Shape OBSERVADO na conta real 5F-D2C (fixture 2062437761, mercado corner):
+    # {success, data:{fixture_id, bookmakers:[{name, slug, odds:{<mk>:{
+    #   opening:{line,over,under}, closing:{...}, inplay:{...}}}}]}}.
+    # Parser antigo olhava 'bookmaker' no nivel errado e devolvia [] — bug real.
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "dummy")
+    canned = {
+        "success": 1,
+        "data": {
+            "fixture_id": "2062437761",
+            "bookmakers": [{
+                "name": "Bet 365", "slug": "bet365",
+                "odds": {
+                    "corner_line": {
+                        "opening": {"line": 7.5, "over": 1.85, "under": 1.95},
+                        "closing": {"line": 8, "over": 1.85, "under": 1.95},
+                        "inplay": {"line": 9.5, "over": 2.2, "under": 1.65},
+                    }
+                }
+            }]
+        }
+    }
+    p = FiveDollarFootballProvider(
+        transport=lambda url, params=None, headers=None: canned)
+    odds = p.fetch_odds(fixture_id="2062437761", market="corner")
+    assert len(odds) == 6  # 2 lados x 3 fases
+    sides = {(o.side, o.coleta_tipo, o.line) for o in odds}
+    assert ("over", "pre_match", 7.5) in sides
+    assert ("under", "pre_match", 8) in sides
+    assert ("over", "live", 9.5) in sides
+    assert all(o.bookmaker == "Bet 365" for o in odds)
+    assert all(o.market == "corner" for o in odds)
+    # submarket registra market_key/phase
+    assert any(o.submarket == "corner_line/opening" for o in odds)
+    assert any(o.submarket == "corner_line/inplay" for o in odds)
+
+
+def test_fivedollar_parse_odds_handicap_home_away(gate_aberto, monkeypatch):
+    # Mercado asian (handicap): lados home/away, nao over/under.
+    monkeypatch.setenv("FIVE_DOLLAR_FOOTBALL_API_KEY", "dummy")
+    canned = {"success": 1, "data": {"fixture_id": "1", "bookmakers": [{
+        "name": "Bet 365", "slug": "bet365",
+        "odds": {"asian_handicap": {
+            "opening": {"line": 0.5, "home": 2.05, "away": 1.8}}}}]}}
+    p = FiveDollarFootballProvider(
+        transport=lambda url, params=None, headers=None: canned)
+    odds = p.fetch_odds(fixture_id="1", market="asian")
+    assert {(o.side, o.line) for o in odds} == {("home", 0.5), ("away", 0.5)}
+    assert all(o.coleta_tipo == "pre_match" for o in odds)
+
+
+def test_redact_prefixo_credencial_5fd2c():
+    # 5Dollar /status retorna data.key.prefix = "fb_live_xxxx" (prefixo parcial).
+    # _redact deve remover o prefixo, nao apenas o valor completo.
+    from src.multifonte import _redact
+    segredo_completo = "fb_live_UMSEGREDOCOMPLETO123"
+    texto = '{"data":{"key":{"prefix":"fb_live_UMSEG"}}}'
+    r = _redact(texto, [segredo_completo])
+    assert "fb_live_UMSEG" not in r
+    assert "fb_live_" not in r
+    assert "[REDACTED]" in r
+
+
 def test_endpoint_nao_confirmado_nao_inventa():
     assert issubclass(EndpointNotConfirmed, RuntimeError)
 
