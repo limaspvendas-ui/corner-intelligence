@@ -614,10 +614,22 @@ def test_multifonte_nao_importa_motor():
 def test_runner_banco_read_only(gate_fechado, sem_credenciais):
     r = auditar()
     b = r["banco_snapshots"]
-    # O runner abriu o banco em modo ro (file:...?mode=ro). Confirma que nao
-    # alterou: total deve permanecer 317951.
-    assert b.get("total") == 317951
-    assert b.get("por_provider") == {"api_football": 317951}
+    # O runner abriu o banco em modo ro (file:...?mode=ro). Confirma que NAO
+    # alterou: o total reportado deve ser EXATAMENTE o total atual do banco
+    # (qualquer que seja -- coletas prospectivas multiprovider da 5F-E2 podem
+    # ter acrescentado registros legitimos). O invariant e read-only, nao um
+    # numero fixo.
+    import sqlite3
+    from src.config import DB_PATH
+    con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    esperado_total = con.execute(
+        "SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0]
+    esperado_provider = dict(con.execute(
+        "SELECT provider, COUNT(*) FROM odds_snapshot_history "
+        "GROUP BY provider").fetchall())
+    con.close()
+    assert b.get("total") == esperado_total
+    assert b.get("por_provider") == esperado_provider
     assert b.get("provider_null") == 0
     assert b.get("integrity_check") == "ok"
 
