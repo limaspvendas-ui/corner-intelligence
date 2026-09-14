@@ -1,0 +1,1 @@
+# Corner Intelligence - pacote de analise de escanteios via API-Football Pro.

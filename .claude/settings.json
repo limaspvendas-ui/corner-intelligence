@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m src.app:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python -m src.app)",
+      "Bash(pip install:*)"
+    ]
+  }
+}

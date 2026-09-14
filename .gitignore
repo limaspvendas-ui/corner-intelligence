@@ -1,0 +1,36 @@
+# Segredos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Ambiente de trabalho
+.vscode/
+.idea/
+
+# Testes / cache de execução
+.pytest_cache/
+
+# Logs
+logs/
+
+# Bancos SQLite (estado mutavel: cache da API + registro operacional).
+# Preservados localmente; excluir do Git nao apaga o arquivo.
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+*.sqlite
+*.sqlite3
+
+# Backups por etapa (nao versionaveis)
+backups/
+
+# Scratch files (raiz do repo) - produtos de execucao/inspecao temporaria
+/_tmp_*
+/varredura_*
