@@ -191,11 +191,18 @@ def test_candidato_leakage_nao_supera_baseline_pre(preds):
 
 
 # ----------------------------------------------------------------------
-# Gate de Corners (camada operacional): EM_OBSERVAÇÃO => observacao
+# Gate de Corners (camada operacional): status estatístico preservado
+# EM_OBSERVAÇÃO; override habilita operacionalmente (auditável).
 # ----------------------------------------------------------------------
-def test_corners_gate_em_observacao():
-    """CORNERS status = EM_OBSERVAÇÃO => nunca operacional na camada."""
-    from src.operacional import STATUS_MERCADOS, _rota_mercado
+def test_corners_status_estatistico_preservado_em_obs():
+    """O status ESTATÍSTICO de CORNERS permanece EM_OBSERVAÇÃO (o diagnóstico
+    não o promoveu). A habilitação operacional, se houver, vem de override
+    explícito do operador -- separada do status estatístico real."""
+    from src.operacional import STATUS_MERCADOS, OVERRIDE_OPERACIONAL, _rota_mercado
     from src.validacao_multifonte import EM_OBS
+    # status estatístico real preservado (não promovido pelo diagnóstico)
     assert STATUS_MERCADOS["escanteios"]["status"] == EM_OBS
-    assert _rota_mercado("escanteios") == "observation"
+    # override habilita operacionalmente, preservando status estatístico
+    assert "escanteios" in OVERRIDE_OPERACIONAL
+    assert OVERRIDE_OPERACIONAL["escanteios"]["status_estatistico"] == EM_OBS
+    assert _rota_mercado("escanteios") == "operational"  # por override

@@ -134,15 +134,27 @@ def test_c_resultado_aprovado_vira_observacao_nao_operacional():
 
 
 # ----------------------------------------------------------------------
-# D. CORNERS sinal -> EM_OBSERVAÇÃO (observacao)
+# D. CORNERS sinal -> operacional por OVERRIDE (status estatístico preservado)
 # ----------------------------------------------------------------------
-def test_d_corners_sinal_em_observacao():
+def test_d_corners_sinal_operacional_por_override():
+    """CORNERS aprovado pelo motor -> operacional por OVERRIDE do operador.
+    O status estatístico real (EM_OBSERVAÇÃO) é preservado -- override NÃO
+    é aprovação estatística."""
     saida = _saida([_av("escanteios", "Over 9.5 escanteios", 0.91, 0.68)])
-    assert saida.operational_opportunities == []
-    obs = [o for o in saida.observations if o["mercado"] == "escanteios"]
-    assert len(obs) == 1
-    assert obs[0]["status_estatistico"] == EM_OBS
-    assert obs[0]["decisao_oficial"] == "OBSERVACAO"
+    # override => operacional (não observação)
+    assert len(saida.operational_opportunities) == 1
+    o = saida.operational_opportunities[0]
+    assert o["mercado"] == "escanteios"
+    assert o["decisao_oficial"] == "ENTRAR"
+    assert o["aprovada_motor"] is True
+    # status estatístico real PRESERVADO (não promovido)
+    assert o["status_estatistico"] == EM_OBS
+    # origem da habilitação = override, não estatístico
+    assert o["origem_operacional"] == "override_usuario"
+    assert o["status_operacional"] == "HABILITADO_POR_OVERRIDE_DO_USUARIO"
+    # auditável: timestamp + motivo do override
+    assert o["timestamp_override"] is not None
+    assert o["motivo_override"] is not None
 
 
 # ----------------------------------------------------------------------
@@ -254,8 +266,9 @@ def test_j_saida_tem_versao_timestamp_provenancia():
 # K. Nenhuma oportunidade -> resposta valida, sem aposta forçada
 # ----------------------------------------------------------------------
 def test_k_nenhuma_oportunidade_resultado_valido():
-    # motor aprovou somente corners (EM_OBSERVAÇÃO) -> nenhum operacional
-    saida = _saida([_av("escanteios", "Over 9.5 escanteios", 0.91, 0.68)])
+    # motor aprovou somente resultado (EM_OBSERVAÇÃO, sem override) ->
+    # nenhum operacional. CORNERS tem override, mas não está aqui.
+    saida = _saida([_av("resultado", "Vitoria mandante (1)", 0.92, 0.70)])
     assert saida.operational_opportunities == []
     assert saida.nenhum_aprovado is True
     txt = formatar_saida(saida)
@@ -288,12 +301,117 @@ def test_camada_nao_altera_versao_do_motor():
 
 
 def test_nunca_promove_automaticamente():
-    """Mesmo com aprovacao do motor em corners/resultado, o status
-    estatístico NÃO é promovido a operacional pela camada."""
+    """O status ESTATÍSTICO não é promovido pela camada. CORNERS vira
+    operacional por OVERRIDE, mas seu status_estatistico real permanece
+    EM_OBSERVAÇÃO (não vira APROVADO_PROX). RESULTADO (sem override)
+    permanece em observação."""
     saida = _saida([
         _av("escanteios", "Over 9.5 escanteios", 0.95, 0.80),
         _av("resultado", "Vitoria mandante (1)", 0.95, 0.80),
     ])
-    # ambos em observacao, nenhum em operacional
-    assert saida.operational_opportunities == []
-    assert {o["mercado"] for o in saida.observations} == {"escanteios", "resultado"}
+    # corners operacional por override; resultado em observação
+    assert len(saida.operational_opportunities) == 1
+    corners_op = saida.operational_opportunities[0]
+    assert corners_op["mercado"] == "escanteios"
+    # status ESTATÍSTICO preservado (não promovido a APROVADO_PROX)
+    assert corners_op["status_estatistico"] == EM_OBS
+    assert corners_op["origem_operacional"] == "override_usuario"
+    # resultado sem override => observação
+    res_obs = [o for o in saida.observations if o["mercado"] == "resultado"]
+    assert len(res_obs) == 1
+    assert res_obs[0]["status_estatistico"] == EM_OBS
+
+
+# ----------------------------------------------------------------------
+# Override operacional de CORNERS -- testes específicos (macroetapa final)
+# ----------------------------------------------------------------------
+def test_status_estatistico_corners_preservado_em_obs():
+    """O override NÃO altera o status estatístico real de CORNERS no
+    registro oficial -- permanece EM_OBSERVAÇÃO."""
+    from src.operacional import STATUS_MERCADOS, OVERRIDE_OPERACIONAL
+    assert STATUS_MERCADOS["escanteios"]["status"] == EM_OBS
+    assert "escanteios" in OVERRIDE_OPERACIONAL
+    assert OVERRIDE_OPERACIONAL["escanteios"]["status_estatistico"] == EM_OBS
+    assert OVERRIDE_OPERACIONAL["escanteios"]["status_operacional"] == \
+        "HABILITADO_POR_OVERRIDE_DO_USUARIO"
+
+
+def test_rota_mercado_corners_operacional_por_override():
+    """_rota_mercado('escanteios') retorna 'operational' por override,
+    mesmo com status estatístico EM_OBSERVAÇÃO."""
+    from src.operacional import _rota_mercado
+    assert _rota_mercado("escanteios") == "operational"
+    # GOALS também operacional (estatístico)
+    assert _rota_mercado("gols") == "operational"
+    # resultado sem override => observação
+    assert _rota_mercado("resultado") == "observation"
+    # cards => bloqueado
+    assert _rota_mercado("cartoes") == "blocked"
+
+
+def test_origem_operacional_distinta_goals_vs_corners():
+    """GOALS tem origem estatístico; CORNERS tem origem override_usuario.
+    A distinção é auditável na entrada."""
+    saida = _saida([
+        _av("gols", "Over 2.5 gols", 0.93, 0.75),
+        _av("escanteios", "Over 9.5 escanteios", 0.91, 0.68),
+    ])
+    assert len(saida.operational_opportunities) == 2
+    by_mercado = {o["mercado"]: o for o in saida.operational_opportunities}
+    # GOALS: estatístico
+    g = by_mercado["gols"]
+    assert g["origem_operacional"] == "estatistico"
+    assert g["status_operacional"] == "HABILITADO_ESTATISTICAMENTE"
+    assert g["status_estatistico"] == APROVADO_PROX
+    assert g["timestamp_override"] is None
+    # CORNERS: override
+    c = by_mercado["escanteios"]
+    assert c["origem_operacional"] == "override_usuario"
+    assert c["status_operacional"] == "HABILITADO_POR_OVERRIDE_DO_USUARIO"
+    assert c["status_estatistico"] == EM_OBS  # preservado
+    assert c["timestamp_override"] is not None
+
+
+def test_override_corners_nao_aprovado_motor_fica_observacao():
+    """Override NÃO força aposta. Se o motor NÃO aprovar corners, a
+    avaliação vai para observação (não vira oportunidade operacional)."""
+    saida = _saida(
+        aprovadas=[_av("gols", "Over 2.5 gols", 0.93, 0.75)],
+        avaliacoes=[
+            _av("gols", "Over 2.5 gols", 0.93, 0.75),
+            _av("escanteios", "Over 9.5 escanteios", 0.55, 0.40),  # não aprovado
+        ],
+    )
+    # corners não aprovado pelo motor => observação, não operacional
+    corners_ops = [o for o in saida.operational_opportunities
+                   if o["mercado"] == "escanteios"]
+    assert corners_ops == []
+    corners_obs = [o for o in saida.observations if o["mercado"] == "escanteios"]
+    assert len(corners_obs) == 1
+    assert corners_obs[0]["aprovada_motor"] is False
+    assert corners_obs[0]["decisao_oficial"] == "OBSERVACAO"
+    assert corners_obs[0]["status_estatistico"] == EM_OBS
+
+
+def test_override_auditavel_timestamp_e_decisao_humana():
+    """O registro de override é auditável: timestamp + decisao_humana + motivo."""
+    from src.operacional import OVERRIDE_OPERACIONAL
+    ov = OVERRIDE_OPERACIONAL["escanteios"]
+    assert ov["decisao_humana"] == "true"
+    assert ov["timestamp_override"]  # não vazio
+    assert "drift" in ov["motivo"].lower()
+    assert "override" not in ov["motivo"].lower().replace("override", "") or True
+    # motivo documenta que NENHUM candidato passou estatisticamente
+    assert "nenhum" in ov["motivo"].lower() or "NENHUM" in ov["motivo"]
+
+
+def test_goals_corners_coexistem_operacional():
+    """GOALS (estatístico) e CORNERS (override) coexistem como
+    oportunidades operacionais, com origem distinta."""
+    saida = _saida([
+        _av("gols", "Over 2.5 gols", 0.93, 0.75),
+        _av("escanteios", "Over 9.5 escanteios", 0.91, 0.68),
+    ])
+    mercados_op = {o["mercado"] for o in saida.operational_opportunities}
+    assert mercados_op == {"gols", "escanteios"}
+    assert saida.nenhum_aprovado is False

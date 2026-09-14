@@ -9,10 +9,12 @@ saída; a IA NÃO substitui o motor -- interpreta o resultado oficial.
 PRINCÍPIOS INEGOCIÁVEIS (fechamento operacional):
   - UM motor. Esta camada consome a saída já existente; não recalcula
     prob/confianca/linha/edge. Os valores exibidos vêm direto do motor.
-  - Ação operacional somente onde JÁ existe aprovação estatística.
-    Hoje: somente GOALS (APROVADO_PARA_PROXIMA_FASE).
+  - Ação operacional somente onde JÁ existe aprovação estatística OU onde o
+    operador decidiu explicitamente habilitar por OVERRIDE (auditável, separado
+    do status estatístico). Hoje: GOALS (estatístico) e CORNERS (override).
   - Mercados não aprovados são expostos para OBSERVAÇÃO ou BLOQUEADOS, nunca
-    como oportunidade operacional aprovada. Nunca promover por cobertura.
+    como oportunidade operacional aprovada estatisticamente. Nunca promover
+    por cobertura. Override NÃO é aprovação estatística.
   - NULL != ZERO. Ausência nunca vira zero. Dado insuficiente => NÃO AVALIÁVEL.
   - Nenhuma aposta forçada. "NENHUMA OPORTUNIDADE OPERACIONAL APROVADA" é
     resultado válido.
@@ -49,7 +51,16 @@ from src.validacao_multifonte import (
 
 # Versão da camada operacional (NÃO é versão do motor; é versão do gate/
 # formato de saída). O motor continua em VERSAO_PREJOGO_OP.
-VERSAO_CAMADA_OPERACIONAL = "operacional-1.0"
+# operacional-1.1-override: habilitação operacional de CORNERS por override
+# explícito do operador, preservando o status estatístico real (EM_OBSERVAÇÃO).
+VERSAO_CAMADA_OPERACIONAL = "operacional-1.1-override"
+
+# Origem da habilitação operacional (distingue aprovação estatística de
+# override do operador -- nunca chamar override de aprovação estatística).
+ORIGEM_ESTATISTICO = "estatistico"
+ORIGEM_OVERRIDE = "override_usuario"
+STATUS_OP_ESTATISTICO = "HABILITADO_ESTATISTICAMENTE"
+STATUS_OP_OVERRIDE = "HABILITADO_POR_OVERRIDE_DO_USUARIO"
 
 # ----------------------------------------------------------------------
 # 3. REGISTRO OFICIAL DE STATUS DOS MERCADOS
@@ -106,6 +117,38 @@ STATUS_MERCADOS: dict[str, dict[str, str]] = {
 # esta camada roteia. pressao_live e odds_roi NAO sao pre-jogo: aparecem
 # somente como entradas de status em blocked.
 _MERCADOS_PRE_GAME = ("gols", "escanteios", "resultado", "cartoes")
+
+# ----------------------------------------------------------------------
+# OVERRIDE OPERACIONAL EXPLÍCITO DO OPERADOR
+# ----------------------------------------------------------------------
+# Habilita um mercado operacionalmente INDEPENDENTE do status estatístico,
+# preservando o status estatístico real em STATUS_MERCADOS (que NÃO é
+# alterado). Auditável: timestamp + decisão humana explícita.
+#
+# NÃO é aprovação estatística. O status_estatistico real permanece
+# EM_OBSERVAÇÃO para escanteios (drift não resolvido legitimamente). O
+# operador assume a decisão de habilitar operacionalmente mesmo assim.
+#
+# A oportunidade individual ainda precisa cumprir as regras do motor
+# (aprovada_motor=True). Override não força aposta: se o motor retornar
+# NÃO ENTRAR, não há oportunidade.
+OVERRIDE_OPERACIONAL: dict[str, dict[str, str]] = {
+    "escanteios": {
+        "status_operacional": STATUS_OP_OVERRIDE,
+        "status_estatistico": EM_OBS,  # preservado -- NÃO é aprovação estatística
+        "origem": ORIGEM_OVERRIDE,
+        "decisao_humana": "true",
+        "timestamp_override": "2026-09-14T00:00:00Z",
+        "motivo": (
+            "drift temporal confirmado (hit 0.927->0.875 pos-cutoff "
+            "2026-05-10, -5.2 p.p.); causa = overdispersion pós-drift "
+            "(var/mean 1.10->1.37) + mudanca de composicao (Copa 2026); "
+            "4 candidatos testados, NENHUM passou nos 8 criterios "
+            "estatisticos; operador habilita operacionalmente por decisao "
+            "explicita, preservando status estatistico real (EM_OBSERVAÇÃO)"
+        ),
+    },
+}
 
 # Decisão oficial por status (o gate operacional -- distinto da decisão do
 # motor, que e preservada como aprovada_motor).
@@ -178,6 +221,22 @@ def _entry_opp(
     NÃO altera prob/confianca/linha -- copia direto do motor."""
     fx = varredura.fixture
     status_info = STATUS_MERCADOS.get(mercado, {"status": NAO_AVAL, "motivo": ""})
+    override = OVERRIDE_OPERACIONAL.get(mercado)
+    # Origem da habilitação operacional: estatística (GOALS) ou override
+    # (CORNERS). Override preserva o status_estatistico real.
+    if override is not None:
+        origem_op = override["origem"]
+        status_op = override["status_operacional"]
+        decisao_oficial = "ENTRAR"
+        timestamp_override = override.get("timestamp_override")
+        motivo_override = override.get("motivo")
+    else:
+        origem_op = ORIGEM_ESTATISTICO
+        status_op = STATUS_OP_ESTATISTICO
+        decisao_oficial = _DECISAO_OFICIAL_POR_STATUS.get(
+            status_info["status"], "BLOQUEADO")
+        timestamp_override = None
+        motivo_override = None
     return {
         "fixture_id": getattr(fx, "fixture_id", None),
         "espec": varredura.espec,
@@ -191,10 +250,17 @@ def _entry_opp(
         "prob": av.prob,
         "confianca": av.confianca,
         "aprovada_motor": True,
-        "decisao_oficial": _DECISAO_OFICIAL_POR_STATUS.get(
-            status_info["status"], "BLOQUEADO"),
+        "decisao_oficial": decisao_oficial,
         "status_estatistico": status_info["status"],
         "motivo_status": status_info["motivo"],
+        # Origem da habilitação operacional (auditável):
+        #  - estatistico: GOALS (APROVADO_PARA_PROXIMA_FASE)
+        #  - override_usuario: CORNERS (override explícito, status
+        #    estatístico real preservado em status_estatistico)
+        "origem_operacional": origem_op,
+        "status_operacional": status_op,
+        "timestamp_override": timestamp_override,
+        "motivo_override": motivo_override,
         "prediction_timestamp": None,  # preenchido pelo caller (generated_at)
         "riscos": list(av.riscos),
         "source": f"motor:{VERSAO_PREJOGO_OP}",
@@ -202,7 +268,15 @@ def _entry_opp(
 
 
 def _rota_mercado(mercado: str) -> str:
-    """Roteia um mercado para operational / observation / blocked pelo status."""
+    """Roteia um mercado para operational / observation / blocked.
+
+    Override operacional explícito (OVERRIDE_OPERACIONAL) tem precedência
+    sobre o status estatístico para o GATE operacional -- MAS o status
+    estatístico real é preservado na entrada (status_estatistico). Override
+    NÃO é aprovação estatística.
+    """
+    if mercado in OVERRIDE_OPERACIONAL:
+        return "operational"
     st = STATUS_MERCADOS.get(mercado, {}).get("status", NAO_AVAL)
     if st == APROVADO_PROX:
         return "operational"
@@ -271,11 +345,24 @@ def _construir_saida(
     for av in varredura.avaliacoes:
         if av.mercado in aprovadas_mercados:
             continue  # já roteado acima
-        rota = _rota_mercado(av.mercado)
+        # Não aprovado pelo motor: override NÃO força aposta. Mercado com
+        # override mas sem aprovação do motor => observação (status
+        # estatístico real). "Se o motor retornar NÃO ENTRAR: não aparece
+        # como oportunidade."
+        if av.mercado in OVERRIDE_OPERACIONAL:
+            rota = "observation"
+        else:
+            rota = _rota_mercado(av.mercado)
         if rota in ("observation", "blocked"):
             entry = _entry_opp(varredura, av, av.mercado)
             entry["aprovada_motor"] = False
             entry["prediction_timestamp"] = generated_at
+            # Não aprovado pelo motor => não é oportunidade operacional,
+            # mesmo com override. decisao_oficial reflete observação.
+            if av.mercado in OVERRIDE_OPERACIONAL:
+                entry["decisao_oficial"] = "OBSERVACAO"
+                entry["status_operacional"] = None
+                entry["origem_operacional"] = None
             if rota == "observation":
                 observations.append(entry)
             else:
@@ -320,8 +407,11 @@ def _construir_saida(
             "fonte_dados": "API-Football v3 (api-sports.io)",
             "nota": (
                 "Decisao oficial = gate operacional sobre a saida do motor. "
-                "Apenas GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
-                "operacional. Demais mercados: observacao ou bloqueado."
+                "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
+                "operacional por aprovacao ESTATISTICA. CORNERS vira "
+                "oportunidade operacional por OVERRIDE explicito do operador "
+                "(status estatistico real EM_OBSERVAÇÃO preservado). Demais "
+                "mercados: observacao ou bloqueado."
             ),
         },
         nenhum_aprovado=nenhum,
@@ -426,9 +516,12 @@ def varredura_data(
             "projeto_hash": _projeto_hash(),
             "fonte_dados": "API-Football v3 (api-sports.io)",
             "nota": (
-                "Apenas GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
-                "operacional. Resultado/Corners em observacao. "
-                "Cards/Live/ROI bloqueados ou nao avaliaveis."
+                "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
+                "operacional por aprovacao ESTATISTICA. CORNERS vira "
+                "oportunidade operacional por OVERRIDE explicito do operador "
+                "(status estatistico real EM_OBSERVAÇÃO preservado). "
+                "Resultado em observacao. Cards/Live/ROI bloqueados ou nao "
+                "avaliaveis."
             ),
         },
     }
@@ -449,9 +542,11 @@ def formatar_saida(saida: SaidaOficial) -> str:
         L.append(f"  {mk:14s} {info['status']:24s} av={info['avaliacoes_motor']} aprov_motor={info['aprovadas_motor']}")
     L.append("")
     if saida.operational_opportunities:
-        L.append("-- OPORTUNIDADES OPERACIONAIS (GOALS aprovado) --")
+        L.append("-- OPORTUNIDADES OPERACIONAIS --")
         for o in saida.operational_opportunities:
-            L.append(f"  {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']} | {o['decisao_oficial']}")
+            origem = o.get("origem_operacional", "estatistico")
+            tag = "OVERRIDE" if origem == "override_usuario" else "ESTATISTICO"
+            L.append(f"  [{tag}] {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']} | {o['decisao_oficial']} (status_estat={o['status_estatistico']})")
     else:
         L.append("-- OPORTUNIDADES OPERACIONAIS: NENHUMA APROVADA --")
     if saida.observations:
@@ -473,9 +568,11 @@ def formatar_varredura(res: dict[str, Any]) -> str:
     L.append(f"considerados={res['fixtures_considerados']} elegiveis={res['fixtures_elegiveis']} inelegiveis={len(res['fixtures_inelegiveis'])}")
     L.append("")
     if res["operational_opportunities"]:
-        L.append("-- OPORTUNIDADES OPERACIONAIS (GOALS aprovado) --")
+        L.append("-- OPORTUNIDADES OPERACIONAIS --")
         for o in res["operational_opportunities"]:
-            L.append(f"  {o['espec']} | {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']}")
+            origem = o.get("origem_operacional", "estatistico")
+            tag = "OVERRIDE" if origem == "override_usuario" else "ESTATISTICO"
+            L.append(f"  [{tag}] {o['espec']} | {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']}")
     else:
         L.append("-- NENHUMA OPORTUNIDADE OPERACIONAL APROVADA --")
     if res["observations"]:
