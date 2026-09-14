@@ -66,10 +66,118 @@ ST_INVALID = "INVALID"          # value/odd ausente, nao numerica ou <= 0
 COLETA_PRE = "pre_match"
 COLETA_LIVE = "live"
 
+# Provider canonico historico (unico integrado quando os registros legados
+# foram produzidos -- confirmado por auditoria Etapa 5F-B).
+PROVIDER_API_FOOTBALL = "api_football"
+
+
+# ----------------------------------------------------------------------
+# Abstracao de Provider (Etapa 5F-C)
+# ----------------------------------------------------------------------
+# O coletor nao assume mais diretamente que qualquer cliente sempre e
+# API-Football. Cada provider tem identidade explicita (provider_name) que
+# acompanha os dados ate o armazenamento (coluna `provider`).
+#
+# PROVIDER  = API que forneceu os dados (api_football, the_odds_api, ...).
+# BOOKMAKER = casa de apostas representada dentro do feed (bet365, ...).
+# Conceitos distintos -- nunca confundir.
+
+from typing import Protocol
+
+
+class OddsProvider(Protocol):
+    """Interface de um provider de odds. Identidade explicita via provider_name."""
+
+    provider_name: str
+
+    def get(self, endpoint: str, params: dict | None = None, **kw) -> list:
+        ...
+
+
+class APIFootballOddsProvider:
+    """Adapter do provider API-Football / API-Sports.
+
+    Reusa src/api_client.py (nao reescreve cliente estavel). Preserva chamadas,
+    cache e comportamento existentes. Apenas acrescenta proveniencia explicita.
+    """
+
+    provider_name = PROVIDER_API_FOOTBALL
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def get(self, endpoint: str, params: dict | None = None, **kw) -> list:
+        return self._client.get(endpoint, params=params, **kw)
+
+
+# Registry: nome canonico -> classe adapter. Nesta etapa SOMENTE api_football.
+# Nao criar adapters falsos para APIs ainda nao implementadas.
+_PROVIDER_REGISTRY: dict[str, type] = {
+    PROVIDER_API_FOOTBALL: APIFootballOddsProvider,
+}
+
+
+def resolve_provider(obj: Any) -> OddsProvider:
+    """Resolve um objeto para um OddsProvider com provider_name explicito.
+
+    - Se `obj` ja expoe `provider_name` (e um OddsProvider): valida contra o
+      registry e retorna como-is. Provider desconhecido => ValueError explicito.
+    - Se `obj` e um client legado (sem `provider_name`): envolve em
+      APIFootballOddsProvider. Justificativa auditada: o unico client que
+      existia antes da Etapa 5F-C era API-Football. Nao e inferencia silenciosa
+      de um provider novo -- e o camado de compatibilidade do provider historico.
+    """
+    name = getattr(obj, "provider_name", None)
+    if name:
+        if name not in _PROVIDER_REGISTRY:
+            raise ValueError(f"provider desconhecido no registry: {name!r}")
+        return obj  # type: ignore[return-value]
+    return APIFootballOddsProvider(obj)
+
+
+# ----------------------------------------------------------------------
+# Hash V2 de identidade de snapshot (Etapa 5F-C: inclui provider)
+# ----------------------------------------------------------------------
+def _hash_identidade(
+    provider: str,
+    fixture_id: int,
+    coleta_tipo: str,
+    bookmaker: str,
+    bet_name: str,
+    bet_id: int | None,
+    familia: str,
+    subfamilia: str | None,
+    lado: str | None,
+    linha: float | None,
+    value_feed: str,
+    odd: float | None,
+    suspended: bool | int | None,
+    status: str,
+) -> str:
+    """SHA-256 da identidade factual + provider.
+
+    Mesmo provider + mesmo snapshot factual => mesma hash (dedup).
+    Provider diferente + mesmo bookmaker/fixture/mercado/linha/odd => hash
+    diferente => ambos preservados (sem colisao multi-fonte). 1.90 -> 1.89 =>
+    novo snapshot. `provider` entra PRIMEIRO (a fonte precede os fatos)."""
+    payload = json.dumps(
+        [
+            provider,
+            fixture_id, coleta_tipo, bookmaker, bet_name, bet_id,
+            familia, subfamilia, lado, linha, value_feed,
+            None if odd is None else round(odd, 6),
+            None if suspended is None else int(suspended),
+            status,
+        ],
+        sort_keys=True, ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS odds_snapshot_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,             -- proveniencia da FONTE (ex.: 'api_football')
     fixture_id INTEGER NOT NULL,
     coleta_tipo TEXT NOT NULL,          -- 'pre_match' | 'live'
     bookmaker TEXT NOT NULL,
@@ -88,8 +196,8 @@ CREATE TABLE IF NOT EXISTS odds_snapshot_history (
     e_pre_jogo INTEGER,                 -- 1 se coleta <= kickoff (anti-leakage); 0 pos; NULL desconhecido
     status TEXT NOT NULL,               -- OK|SUSPENDED|UNMAPPED|INVALID
     motivo TEXT,                        -- motivo quando status != OK
-    snapshot_hash TEXT NOT NULL,
-    UNIQUE (snapshot_hash)              -- dedup: cotacao identica => mesma hash
+    snapshot_hash TEXT NOT NULL,        -- HASH V2: inclui provider (Etapa 5F-C)
+    UNIQUE (snapshot_hash)              -- dedup: cotacao identica + mesmo provider => mesma hash
 );
 CREATE INDEX IF NOT EXISTS idx_odds_hist_fixture
     ON odds_snapshot_history (fixture_id, coleta_tipo);
@@ -182,6 +290,7 @@ def _e_pre_jogo(collected_at: float, fixture_date_iso: str | None) -> int | None
 class OddSnapshot:
     """Uma cotacao factual unitaria, pronta para append."""
 
+    provider: str            # proveniencia da FONTE (ex.: 'api_football')
     fixture_id: int
     coleta_tipo: str
     bookmaker: str
@@ -201,20 +310,15 @@ class OddSnapshot:
     motivo: str | None
 
     def hash(self) -> str:
-        """Hash de identidade+cotacao. Cotacao identica => mesma hash (dedup).
-        1.90 -> 1.89 e hash diferente (novo snapshot)."""
-        payload = json.dumps(
-            [
-                self.fixture_id, self.coleta_tipo, self.bookmaker,
-                self.bet_name, self.bet_id, self.familia, self.subfamilia,
-                self.lado, self.linha, self.value_feed,
-                None if self.odd is None else round(self.odd, 6),
-                None if self.suspended is None else int(self.suspended),
-                self.status,
-            ],
-            sort_keys=True, ensure_ascii=False,
+        """Hash V2 de identidade+cotacao (inclui provider). Cotacao identica +
+        mesmo provider => mesma hash (dedup). 1.90 -> 1.89 => novo snapshot.
+        Provider diferente => hash diferente => ambos preservados."""
+        return _hash_identidade(
+            self.provider, self.fixture_id, self.coleta_tipo, self.bookmaker,
+            self.bet_name, self.bet_id, self.familia, self.subfamilia,
+            self.lado, self.linha, self.value_feed, self.odd,
+            self.suspended, self.status,
         )
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _construir_snapshots(
@@ -224,8 +328,12 @@ def _construir_snapshots(
     *,
     collected_at: float,
     fixture_date: str | None,
+    provider: str = PROVIDER_API_FOOTBALL,
 ) -> list[OddSnapshot]:
-    """Constrói snapshots a partir de UMA entry da resposta (pre ou live)."""
+    """Constrói snapshots a partir de UMA entry da resposta (pre ou live).
+
+    `provider` identifica a FONTE dos dados (default api_football para
+    compatibilidade do camada historica; adapters passam explicitamente)."""
     update_feed = str(raw_entry.get("update") or "")
     pre = coleta_tipo == COLETA_PRE
     out: list[OddSnapshot] = []
@@ -244,7 +352,8 @@ def _construir_snapshots(
                     out.append(
                         _unit(fixture_id, coleta_tipo, bm_name, bet_name,
                               bet_id, familia, sub, v, update_feed,
-                              collected_at, fixture_date, suspended=None)
+                              collected_at, fixture_date, suspended=None,
+                              provider=provider)
                     )
         return out
 
@@ -263,7 +372,7 @@ def _construir_snapshots(
             out.append(
                 _unit(fixture_id, coleta_tipo, book_name, bet_name, bet_id,
                       familia, sub, v, update_feed, collected_at,
-                      fixture_date, suspended=suspended)
+                      fixture_date, suspended=suspended, provider=provider)
             )
     return out
 
@@ -272,7 +381,7 @@ def _unit(
     fixture_id: int, coleta_tipo: str, bm_name: str, bet_name: str,
     bet_id: int | None, familia: str, sub: str | None, v: dict[str, Any],
     update_feed: str, collected_at: float, fixture_date: str | None,
-    *, suspended: bool | None,
+    *, suspended: bool | None, provider: str = PROVIDER_API_FOOTBALL,
 ) -> OddSnapshot:
     value_feed = str(v.get("value") or "")
     odd = _to_float(v.get("odd"))
@@ -295,6 +404,7 @@ def _unit(
         lado, linha = extrair_lado_linha(familia, sub, value_feed)
 
     return OddSnapshot(
+        provider=provider,
         fixture_id=fixture_id, coleta_tipo=coleta_tipo, bookmaker=bm_name,
         bet_name=bet_name, bet_id=bet_id, familia=familia, subfamilia=sub,
         lado=lado, linha=linha, value_feed=value_feed, odd=odd_v,
@@ -304,22 +414,110 @@ def _unit(
 
 
 # ----------------------------------------------------------------------
+# Migracao idempotente para multi-provider (Etapa 5F-C)
+# ----------------------------------------------------------------------
+# user_version marca o estado da migracao no cabecalho do DB:
+#   0 = pre-5F-C (sem coluna provider, hashes V1)
+#   2 = 5F-C aplicado (coluna provider + hashes V2)
+# O recompute de hash V2 e deterministico, entao reprocessar e seguro; o
+# marcador apenas evita retrabalho. Se um crash ocorrer apos COMMIT mas antes
+# de setar user_version, a reinicializacao reprocessa (mesmos V2 hashes).
+_USER_VERSION_MULTIPROVIDER = 2
+
+
+def _migrar_para_multiprovider(conn: sqlite3.Connection) -> None:
+    """Adiciona a coluna `provider`, classifica o legado como api_football e
+    migra os hashes para V2 (incluindo provider). Idempotente e transacional.
+
+    - DB novo: _SCHEMA ja cria com `provider`; user_version ainda 0 => a funcao
+      roda o recompute sobre 0 linhas (no-op) e seta user_version=2.
+    - DB legado (sem `provider`): ALTER ADD COLUMN ... NOT NULL DEFAULT
+      'api_football' (backfill atomico de todos os registros em uma instrucao)
+      + recompute dos snapshot_hash para V2, em transacao explicita.
+    - DB ja migrado (user_version>=2): no-op imediato.
+
+    Seguranca do recompute de hash (V1 -> V2):
+      * snapshot_hash NAO tem FK, referencia externa, relatorio ou logica que
+        dependa do seu valor (auditado: usado apenas para dedup UNIQUE nesta
+        tabela). Recomputar e seguro.
+      * Todos os hashes V1 armazenados sao distintos (UNIQUE), logo todas as
+        identidades factuais sao distintas, logo todos os hashes V2 serao
+        distintos (V2 = V1 + 1 campo). Nenhuma violacao de UNIQUE.
+      * O recompute ocorre em transacao explicita (BEGIN/COMMIT/ROLLBACK);
+        falha => rollback desfaz TODOS os UPDATEs de hash; user_version nao e
+        incrementado, entao a reinicializacao tenta de novo.
+    """
+    user_ver = conn.execute("PRAGMA user_version").fetchone()[0]
+    if user_ver >= _USER_VERSION_MULTIPROVIDER:
+        return  # ja migrado
+
+    cols = [r[1] for r in conn.execute(
+        "PRAGMA table_info(odds_snapshot_history)")]
+    if "provider" not in cols:
+        # ALTER com DEFAULT 'api_football' preenche o legado em instrucao unica
+        # (atomico no SQLite). NOT NULL impede provider NULL dali em diante.
+        conn.execute(
+            "ALTER TABLE odds_snapshot_history "
+            "ADD COLUMN provider TEXT NOT NULL DEFAULT 'api_football'")
+    # Indice de provider (criado apos a coluna existir; idempotente). Em DBs
+    # novos a coluna ja vem do _SCHEMA; em DBs legados vem do ALTER acima.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_odds_hist_provider "
+        "ON odds_snapshot_history (provider)")
+
+    # Recomputa snapshot_hash para V2 em transacao explicita. Controle manual
+    # (isolation_level=None) evita o auto-commit do DDL/dml do sqlite3.
+    old_iso = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN")
+        rows = conn.execute(
+            """
+            SELECT id, fixture_id, coleta_tipo, bookmaker, bet_name, bet_id,
+                   familia, subfamilia, lado, linha, value_feed, odd,
+                   suspended, status
+            FROM odds_snapshot_history
+            """).fetchall()
+        for (rid, fixture_id, coleta_tipo, bookmaker, bet_name, bet_id,
+              familia, subfamilia, lado, linha, value_feed, odd,
+              suspended, status) in rows:
+            h = _hash_identidade(
+                PROVIDER_API_FOOTBALL, fixture_id, coleta_tipo, bookmaker,
+                bet_name, bet_id, familia, subfamilia, lado, linha,
+                value_feed, odd, suspended, status,
+            )
+            conn.execute(
+                "UPDATE odds_snapshot_history SET snapshot_hash=? "
+                "WHERE id=?", (h, rid))
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        conn.isolation_level = old_iso
+        raise
+    # Marcador apos COMMIT bem-sucedido (idempotente: reprocessar e seguro).
+    conn.execute(f"PRAGMA user_version = {_USER_VERSION_MULTIPROVIDER}")
+    conn.isolation_level = old_iso
+
+
+# ----------------------------------------------------------------------
 # Persistencia append-only (FASE 6: nunca sobrescreve)
 # ----------------------------------------------------------------------
 class OddsSnapshotStore:
-    """Append-only. INSERT OR IGNORE deduplica cotacao identica (mesma hash)."""
+    """Append-only. INSERT OR IGNORE deduplica cotacao identica (mesmo
+    provider + mesma identidade => mesma hash V2)."""
 
     def __init__(self, db_path: str | None = None) -> None:
         self.db_path = str(db_path or DB_PATH)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            _migrar_para_multiprovider(conn)
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
 
     def append_many(self, snapshots: Iterable[OddSnapshot]) -> dict[str, int]:
-        """Insere snapshots. Dedup por hash: cotacao identica => ignorada.
-        Retorna {'inseridos': N, 'duplicados': N}."""
+        """Insere snapshots. Dedup por hash V2: mesmo provider + mesma
+        cotacao => ignorada. Retorna {'inseridos': N, 'duplicados': N}."""
         inseridos = 0
         duplicados = 0
         snaps = list(snapshots)
@@ -331,13 +529,14 @@ class OddsSnapshotStore:
                 cur = conn.execute(
                     """
                     INSERT OR IGNORE INTO odds_snapshot_history
-                        (fixture_id, coleta_tipo, bookmaker, bet_name, bet_id,
-                         familia, subfamilia, lado, linha, value_feed, odd,
-                         suspended, update_feed, collected_at, fixture_date,
+                        (provider, fixture_id, coleta_tipo, bookmaker, bet_name,
+                         bet_id, familia, subfamilia, lado, linha, value_feed,
+                         odd, suspended, update_feed, collected_at, fixture_date,
                          e_pre_jogo, status, motivo, snapshot_hash)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
+                        s.provider,
                         s.fixture_id, s.coleta_tipo, s.bookmaker, s.bet_name,
                         s.bet_id, s.familia, s.subfamilia, s.lado, s.linha,
                         s.value_feed, s.odd,
@@ -367,6 +566,9 @@ class OddsSnapshotStore:
             por_status = dict(conn.execute(
                 "SELECT status, COUNT(*) FROM odds_snapshot_history "
                 "GROUP BY status").fetchall())
+            por_provider = dict(conn.execute(
+                "SELECT provider, COUNT(*) FROM odds_snapshot_history "
+                "GROUP BY provider").fetchall())
             n_fixtures = conn.execute(
                 "SELECT COUNT(DISTINCT fixture_id) FROM odds_snapshot_history"
             ).fetchone()[0]
@@ -379,6 +581,7 @@ class OddsSnapshotStore:
             "por_coleta_tipo": por_tipo,
             "por_familia": por_familia,
             "por_status": por_status,
+            "por_provider": por_provider,
             "snapshots_pre_jogo": n_pre_jogo,
         }
 
@@ -444,6 +647,7 @@ def ingerir_cache(
             snaps = _construir_snapshots(
                 fx, COLETA_PRE, entry,
                 collected_at=float(created_at), fixture_date=fx_date,
+                provider=PROVIDER_API_FOOTBALL,
             )
             coletados.extend(snaps)
         # /odds/live
@@ -468,6 +672,7 @@ def ingerir_cache(
             snaps = _construir_snapshots(
                 fx, COLETA_LIVE, entry,
                 collected_at=float(created_at), fixture_date=fx_date,
+                provider=PROVIDER_API_FOOTBALL,
             )
             coletados.extend(snaps)
     finally:
@@ -497,11 +702,15 @@ def coletar_fixture(
 ) -> dict[str, Any]:
     """FASE 9: coleta one-shot de UM fixture na API (e grava no cache).
 
-    Pre-match: 1 chamada /odds. Live (se --live): +1 chamada /odds/live.
-    Retorna consumo de API e contagem de snapshots.
+    `client` pode ser um OddsProvider (com provider_name) ou um client legado
+    (sem provider_name -> envolvido como APIFootballOddsProvider, o unico
+    provider historico auditado). Pre-match: 1 chamada /odds. Live (se --live):
+    +1 chamada /odds/live. Retorna consumo de API e contagem de snapshots.
     """
     from src.config import CACHE_TTL_LIVE
 
+    provider = resolve_provider(client)
+    provider_name = provider.provider_name
     epoch = float(collected_at if collected_at is not None else time.time())
     consumo = 0
     snaps: list[OddSnapshot] = []
@@ -516,24 +725,24 @@ def coletar_fixture(
         pass
 
     # pre-match /odds
-    resp_pre = client.get("/odds", params={"fixture": fixture_id})
+    resp_pre = provider.get("/odds", params={"fixture": fixture_id})
     consumo += 1
     if resp_pre:
         snaps.extend(_construir_snapshots(
             fixture_id, COLETA_PRE, resp_pre[0],
-            collected_at=epoch, fixture_date=fx_date,
+            collected_at=epoch, fixture_date=fx_date, provider=provider_name,
         ))
 
     # live /odds/live (separado, FASE 16)
     if live:
-        resp_live = client.get(
+        resp_live = provider.get(
             "/odds/live", params={"fixture": fixture_id}, ttl=CACHE_TTL_LIVE,
         )
         consumo += 1
         if resp_live:
             snaps.extend(_construir_snapshots(
                 fixture_id, COLETA_LIVE, resp_live[0],
-                collected_at=epoch, fixture_date=fx_date,
+                collected_at=epoch, fixture_date=fx_date, provider=provider_name,
             ))
 
     grav = store.append_many(snaps)
@@ -580,10 +789,11 @@ def coletar_periodico(
 # ----------------------------------------------------------------------
 def format_status(s: dict[str, Any]) -> str:
     linhas = [
-        "[FATO] odds_snapshot_history (append-only)",
+        "[FATO] odds_snapshot_history (append-only, multi-provider)",
         f"  total de snapshots: {s['total_snapshots']}",
         f"  fixtures distintos: {s['fixtures_distintos']}",
         f"  snapshots pre-jogo (e_pre_jogo=1): {s['snapshots_pre_jogo']}",
+        f"  por provider (FONTE): {s.get('por_provider', {})}",
         f"  por coleta_tipo: {s['por_coleta_tipo']}",
         f"  por familia: {s['por_familia']}",
         f"  por status: {s['por_status']}",

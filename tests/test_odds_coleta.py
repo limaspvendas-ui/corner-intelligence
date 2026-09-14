@@ -18,14 +18,20 @@ import pytest
 from src.odds_coleta import (
     COLETA_LIVE,
     COLETA_PRE,
+    PROVIDER_API_FOOTBALL,
+    APIFootballOddsProvider,
     OddsSnapshotStore,
     OddSnapshot,
+    _PROVIDER_REGISTRY,
     _construir_snapshots,
     _e_pre_jogo,
+    _hash_identidade,
+    _migrar_para_multiprovider,
     classificar_mercado,
     coletar_fixture,
     extrair_lado_linha,
     ingerir_cache,
+    resolve_provider,
 )
 
 
@@ -41,8 +47,9 @@ def _snap(fixture_id=1, coleta=COLETA_PRE, bookmaker="Bet365", bet_name="Goals O
           bet_id=5, familia="gols", sub=None, lado="Over", linha=2.5,
           value_feed="Over 2.5", odd=1.90, suspended=None, update_feed="2026-09-10T12:00:00+00:00",
           collected_at=1789000000.0, fixture_date="2026-09-12T01:30:00+00:00",
-          status="OK", motivo=None) -> OddSnapshot:
+          status="OK", motivo=None, provider=PROVIDER_API_FOOTBALL) -> OddSnapshot:
     return OddSnapshot(
+        provider=provider,
         fixture_id=fixture_id, coleta_tipo=coleta, bookmaker=bookmaker,
         bet_name=bet_name, bet_id=bet_id, familia=familia, subfamilia=sub,
         lado=lado, linha=linha, value_feed=value_feed, odd=odd,
@@ -487,3 +494,344 @@ def test_coletor_nao_importa_motor_de_aprovacao():
     import src.odds_coleta as m
     assert not hasattr(m, "PROB_MIN_APROVAR")
     assert not hasattr(m, "scan_pregame_opportunities")
+
+
+# ======================================================================
+# ETAPA 5F-C -- FUNDACAO MULTI-PROVIDER E PROVENIENCIA (20 testes)
+# ======================================================================
+import hashlib
+
+
+def _hash_v1(fixture_id, coleta_tipo, bookmaker, bet_name, bet_id, familia,
+             subfamilia, lado, linha, value_feed, odd, suspended, status):
+    """Reproduz o hash V1 (sem provider) para semear DBs legados em testes."""
+    payload = json.dumps(
+        [fixture_id, coleta_tipo, bookmaker, bet_name, bet_id, familia,
+         subfamilia, lado, linha, value_feed,
+         None if odd is None else round(odd, 6),
+         None if suspended is None else int(suspended), status],
+        sort_keys=True, ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+_LEGACY_SCHEMA = """
+CREATE TABLE odds_snapshot_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fixture_id INTEGER NOT NULL,
+    coleta_tipo TEXT NOT NULL,
+    bookmaker TEXT NOT NULL,
+    bet_name TEXT NOT NULL,
+    bet_id INTEGER,
+    familia TEXT NOT NULL,
+    subfamilia TEXT,
+    lado TEXT,
+    linha REAL,
+    value_feed TEXT NOT NULL,
+    odd REAL,
+    suspended INTEGER,
+    update_feed TEXT,
+    collected_at REAL NOT NULL,
+    fixture_date TEXT,
+    e_pre_jogo INTEGER,
+    status TEXT NOT NULL,
+    motivo TEXT,
+    snapshot_hash TEXT NOT NULL,
+    UNIQUE (snapshot_hash)
+);
+"""
+
+
+def _seed_legacy_db(db_path: Path, n_rows: int = 3) -> None:
+    """Cria um DB legado (sem coluna provider, hashes V1) com n_rows linhas."""
+    con = sqlite3.connect(str(db_path))
+    con.executescript(_LEGACY_SCHEMA)
+    for i in range(n_rows):
+        fid = 100 + i
+        odd = 1.90 + i * 0.01
+        h = _hash_v1(fid, COLETA_PRE, "Bet365", "Goals Over/Under", 5, "gols",
+                     None, "Over", 2.5, "Over 2.5", odd, None, "OK")
+        con.execute(
+            "INSERT INTO odds_snapshot_history (fixture_id, coleta_tipo, "
+            "bookmaker, bet_name, bet_id, familia, subfamilia, lado, linha, "
+            "value_feed, odd, suspended, update_feed, collected_at, "
+            "fixture_date, e_pre_jogo, status, motivo, snapshot_hash) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (fid, COLETA_PRE, "Bet365", "Goals Over/Under", 5, "gols", None,
+             "Over", 2.5, "Over 2.5", odd, None, "2026-09-10T12:00:00+00:00",
+             1789000000.0, "2026-09-12T01:30:00+00:00", 1, "OK", None, h))
+    con.commit()
+    con.close()
+
+
+def _legacy_rows(db_path: Path):
+    con = sqlite3.connect(str(db_path))
+    rows = con.execute(
+        "SELECT id, fixture_id, bookmaker, odd, collected_at, fixture_date, "
+        "linha, snapshot_hash FROM odds_snapshot_history ORDER BY id"
+    ).fetchall()
+    con.close()
+    return rows
+
+
+# --- 1. banco antigo sem provider migra corretamente ---
+def test_migracao_banco_antigo_sem_provider(tmp_path):
+    db = tmp_path / "legacy1.db"
+    _seed_legacy_db(db, n_rows=3)
+    OddsSnapshotStore(db_path=str(db))  # dispara a migracao
+    con = sqlite3.connect(str(db))
+    cols = [r[1] for r in con.execute("PRAGMA table_info(odds_snapshot_history)")]
+    assert "provider" in cols  # coluna adicionada
+    provs = con.execute("SELECT DISTINCT provider FROM odds_snapshot_history").fetchall()
+    con.close()
+    assert provs == [("api_football",)]
+
+
+# --- 2. registros antigos recebem api_football ---
+def test_registros_antigos_recebem_api_football(tmp_path):
+    db = tmp_path / "legacy2.db"
+    _seed_legacy_db(db, n_rows=5)
+    OddsSnapshotStore(db_path=str(db))
+    con = sqlite3.connect(str(db))
+    contagem = dict(con.execute(
+        "SELECT provider, COUNT(*) FROM odds_snapshot_history GROUP BY provider"
+    ).fetchall())
+    con.close()
+    assert contagem == {"api_football": 5}
+
+
+# --- 3. quantidade de linhas permanece identica ---
+def test_migracao_qtd_linhas_idem(tmp_path):
+    db = tmp_path / "legacy3.db"
+    _seed_legacy_db(db, n_rows=7)
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0]
+    OddsSnapshotStore(db_path=str(db))
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0]
+    assert antes == 7 == depois
+
+
+# --- 4. nenhuma odd historica muda ---
+def test_migracao_nenhuma_odd_muda(tmp_path):
+    db = tmp_path / "legacy4.db"
+    _seed_legacy_db(db, n_rows=3)
+    antes = [r[3] for r in _legacy_rows(db)]  # odd
+    OddsSnapshotStore(db_path=str(db))
+    depois = [r[3] for r in _legacy_rows(db)]
+    assert antes == depois
+
+
+# --- 5. nenhum timestamp historico muda ---
+def test_migracao_nenhum_timestamp_muda(tmp_path):
+    db = tmp_path / "legacy5.db"
+    _seed_legacy_db(db, n_rows=3)
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT collected_at, update_feed, fixture_date FROM odds_snapshot_history "
+        "ORDER BY id").fetchall()
+    OddsSnapshotStore(db_path=str(db))
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT collected_at, update_feed, fixture_date FROM odds_snapshot_history "
+        "ORDER BY id").fetchall()
+    assert antes == depois
+
+
+# --- 6. nenhuma fixture muda ---
+def test_migracao_nenhuma_fixture_muda(tmp_path):
+    db = tmp_path / "legacy6.db"
+    _seed_legacy_db(db, n_rows=4)
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT fixture_id FROM odds_snapshot_history ORDER BY id").fetchall()
+    OddsSnapshotStore(db_path=str(db))
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT fixture_id FROM odds_snapshot_history ORDER BY id").fetchall()
+    assert antes == depois
+
+
+# --- 7. nenhuma linha (value/lado/linha) muda ---
+def test_migracao_nenhuma_linha_muda(tmp_path):
+    db = tmp_path / "legacy7.db"
+    _seed_legacy_db(db, n_rows=3)
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT value_feed, lado, linha FROM odds_snapshot_history ORDER BY id"
+    ).fetchall()
+    OddsSnapshotStore(db_path=str(db))
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT value_feed, lado, linha FROM odds_snapshot_history ORDER BY id"
+    ).fetchall()
+    assert antes == depois
+
+
+# --- 8. provider nao pode ficar nulo em novo snapshot valido ---
+def test_provider_nao_pode_ficar_nulo(store):
+    # INSERT OR IGNORE + NOT NULL: provider NULL => rejeitado (0 linhas).
+    s_ok = _snap(provider="api_football")
+    s_null = _snap(odd=1.85, provider=None)
+    r = store.append_many([s_ok, s_null])
+    with sqlite3.connect(store.db_path) as con:
+        n = con.execute(
+            "SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0]
+        n_null = con.execute(
+            "SELECT COUNT(*) FROM odds_snapshot_history WHERE provider IS NULL"
+        ).fetchone()[0]
+    assert n == 1          # soh o valido (provider nao-nulo) foi inserido
+    assert n_null == 0
+
+
+# --- 9. mesma fonte + mesmo snapshot = dedup ---
+def test_mesmo_provider_mesmo_snapshot_dedup(store):
+    a = _snap(provider="api_football")
+    b = _snap(provider="api_football")  # identico
+    r = store.append_many([a, b])
+    assert r["inseridos"] == 1
+    assert r["duplicados"] == 1
+
+
+# --- 10. fonte diferente + mesmo snapshot = dois registros ---
+def test_provider_diferente_dois_registros(store):
+    a = _snap(provider="api_football", bookmaker="Bet365")
+    b = _snap(provider="the_odds_api", bookmaker="Bet365")  # mesmo factual, outra fonte
+    r = store.append_many([a, b])
+    assert r["inseridos"] == 2  # ambos preservados (sem colisao multi-fonte)
+    with sqlite3.connect(store.db_path) as con:
+        provs = sorted(r[0] for r in con.execute(
+            "SELECT provider FROM odds_snapshot_history").fetchall())
+    assert provs == ["api_football", "the_odds_api"]
+
+
+# --- 11. mudanca de odd = novo snapshot ---
+def test_mudanca_de_odd_eh_novo_snapshot(store):
+    a = _snap(odd=1.90, provider="api_football")
+    b = _snap(odd=1.89, provider="api_football")
+    r = store.append_many([a, b])
+    assert r["inseridos"] == 2
+
+
+# --- 12. hash V2 inclui provider ---
+def test_hash_v2_inclui_provider():
+    # mesmo factual, providers diferentes => hashes diferentes
+    h1 = _snap(provider="api_football").hash()
+    h2 = _snap(provider="the_odds_api").hash()
+    assert h1 != h2
+    # hash V2 difere do V1 (sem provider) para o mesmo factual
+    h_v1 = _hash_v1(1, COLETA_PRE, "Bet365", "Goals Over/Under", 5, "gols",
+                    None, "Over", 2.5, "Over 2.5", 1.90, None, "OK")
+    assert _snap(provider="api_football").hash() != h_v1
+
+
+# --- 13. migracao e idempotente (rodar de novo nao altera) ---
+def test_migracao_idempotente(tmp_path):
+    db = tmp_path / "legacy13.db"
+    _seed_legacy_db(db, n_rows=4)
+    OddsSnapshotStore(db_path=str(db))  # 1a migracao
+    estado1 = sqlite3.connect(str(db)).execute(
+        "SELECT id, provider, snapshot_hash FROM odds_snapshot_history ORDER BY id"
+    ).fetchall()
+    user_ver1 = sqlite3.connect(str(db)).execute("PRAGMA user_version").fetchone()[0]
+    OddsSnapshotStore(db_path=str(db))  # 2a (idempotente)
+    estado2 = sqlite3.connect(str(db)).execute(
+        "SELECT id, provider, snapshot_hash FROM odds_snapshot_history ORDER BY id"
+    ).fetchall()
+    user_ver2 = sqlite3.connect(str(db)).execute("PRAGMA user_version").fetchone()[0]
+    assert estado1 == estado2          # nenhum hash/provider reprocessado
+    assert user_ver1 == user_ver2 == 2
+
+
+# --- 14. repetir inicializacao nao altera banco ---
+def test_repetir_init_nao_altera_banco(tmp_path):
+    db = tmp_path / "legacy14.db"
+    _seed_legacy_db(db, n_rows=3)
+    OddsSnapshotStore(db_path=str(db))
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT COUNT(*), COUNT(DISTINCT snapshot_hash) FROM odds_snapshot_history"
+    ).fetchone()
+    for _ in range(3):
+        OddsSnapshotStore(db_path=str(db))
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT COUNT(*), COUNT(DISTINCT snapshot_hash) FROM odds_snapshot_history"
+    ).fetchone()
+    assert antes == depois
+
+
+# --- 15. rollback preserva DB em falha simulada ---
+def test_rollback_preserva_db_em_falha(tmp_path, monkeypatch):
+    db = tmp_path / "legacy15.db"
+    _seed_legacy_db(db, n_rows=3)
+    antes = sqlite3.connect(str(db)).execute(
+        "SELECT id, snapshot_hash, odd, fixture_id FROM odds_snapshot_history "
+        "ORDER BY id").fetchall()
+    # injeta falha no recompute de hash
+    import src.odds_coleta as m
+    boom = [False]
+    def _bomb(*a, **kw):
+        boom[0] = True
+        raise RuntimeError("falha simulada")
+    monkeypatch.setattr(m, "_hash_identidade", _bomb)
+    with pytest.raises(RuntimeError):
+        OddsSnapshotStore(db_path=str(db))
+    monkeypatch.undo()
+    assert boom[0] is True  # chegou ao recompute
+    # DB preservado: hashes V1 (nao recomputados), odds/fixtures intactos
+    depois = sqlite3.connect(str(db)).execute(
+        "SELECT id, snapshot_hash, odd, fixture_id FROM odds_snapshot_history "
+        "ORDER BY id").fetchall()
+    assert antes == depois  # rollback desfez todos os UPDATEs de hash
+    # reinicializacao sem falha conclui a migracao
+    OddsSnapshotStore(db_path=str(db))
+    con = sqlite3.connect(str(db))
+    assert con.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM odds_snapshot_history").fetchone()[0] == 3
+    con.close()
+
+
+# --- 16. adapter API-Football identifica provider corretamente ---
+def test_adapter_api_football_identifica_provider():
+    class LegacyClient:
+        def get(self, endpoint, params=None, **kw):
+            return []
+    adapter = APIFootballOddsProvider(LegacyClient())
+    assert adapter.provider_name == "api_football"
+
+
+# --- 17. registry resolve api_football ---
+def test_registry_resolve_api_football():
+    assert PROVIDER_API_FOOTBALL in _PROVIDER_REGISTRY
+    assert _PROVIDER_REGISTRY[PROVIDER_API_FOOTBALL] is APIFootballOddsProvider
+
+
+# --- 18. provider inexistente falha de forma explicita ---
+def test_provider_inexistente_falha_explicita():
+    class FakeProvider:
+        provider_name = "fonte_fantasma"
+    with pytest.raises(ValueError):
+        resolve_provider(FakeProvider())
+
+
+# --- 19. coletor antigo (client legado) continua funcionando ---
+def test_coletor_antigo_continua_funcionando(store):
+    client = FakeClient(pre=PRE_ODDS, live=LIVE_ODDS)  # sem provider_name
+    r = coletar_fixture(client, store, 42, live=True)
+    assert r["consumo_api"] == 2
+    assert r["inseridos"] > 0
+    with sqlite3.connect(store.db_path) as con:
+        provs = {r[0] for r in con.execute(
+            "SELECT DISTINCT provider FROM odds_snapshot_history").fetchall()}
+    assert provs == {"api_football"}  # client legado => api_football
+
+
+# --- 20. nenhuma regra do motor e importada/modificada ---
+def test_nenhuma_regra_do_motor_alterada_5fc():
+    # o modulo de coleta continua sem depender do motor
+    import src.odds_coleta as m
+    assert not hasattr(m, "PROB_MIN_APROVAR")
+    assert not hasattr(m, "PROB_MAX_APROVAR")
+    assert not hasattr(m, "scan_pregame_opportunities")
+    # regras congeladas permanecem intactas
+    from src.politica_aprovacao import (
+        PROB_MIN_APROVAR, PROB_MAX_APROVAR, CONF_MIN_TOP1,
+    )
+    from src.settlement import _MARCA_CONVENCAO_CARTOES
+    assert PROB_MIN_APROVAR == 0.70
+    assert PROB_MAX_APROVAR == 0.97
+    assert CONF_MIN_TOP1 == 0.60
+    assert _MARCA_CONVENCAO_CARTOES == "amarelo=1, vermelho=2"

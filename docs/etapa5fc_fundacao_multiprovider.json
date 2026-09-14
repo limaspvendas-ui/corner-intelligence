@@ -1,0 +1,159 @@
+{
+  "etapa": "5F-C",
+  "titulo": "Fundacao multi-provider e proveniencia",
+  "natureza": "alteracao estrutural controlada (sem alterar motor)",
+  "branch_origem": "etapa-5f-coleta-odds-reais",
+  "head_origem": "1cc2d6e",
+  "branch_destino": "etapa-5fc-fundacao-multiprovider",
+  "commit_sugerido": "etapa 5fc: preparar fundacao multiprovider com proveniencia",
+  "merge": false,
+  "push": false,
+  "estado_inicial": {
+    "suite": {"passed": 545, "skipped": 18, "failed": 0},
+    "tabela": "odds_snapshot_history",
+    "linhas_antes": 317951,
+    "linhas_depois": 317951,
+    "hashs_distintos_antes": 317951,
+    "hashs_distintos_depois": 317951,
+    "provider_coluna_antes": false,
+    "provider_coluna_depois": true,
+    "user_version_antes": 0,
+    "user_version_depois": 2,
+    "por_coleta_tipo": {"pre_match": 310898, "live": 7053},
+    "por_status": {"OK": 39144, "UNMAPPED": 275740, "INVALID": 1553, "SUSPENDED": 1514},
+    "por_familia": {"UNMAPPED": 278765, "cartoes": 1166, "escanteios": 8114, "gols": 13713, "resultado": 16193},
+    "por_provider_depois": {"api_football": 317951},
+    "e_pre_jogo_1": 298187,
+    "provider_null_depois": 0,
+    "integrity_check_depois": "ok"
+  },
+  "backup": {
+    "criado": true,
+    "arquivo": "data/corner_intelligence_backup_5fc_20260914.db",
+    "tamanho_bytes": 204836864,
+    "gitignored": true,
+    "integrity_check": "ok",
+    "linhas_preservadas": 317951
+  },
+  "schema_antes": {
+    "colunas": ["id", "fixture_id", "coleta_tipo", "bookmaker", "bet_name", "bet_id", "familia", "subfamilia", "lado", "linha", "value_feed", "odd", "suspended", "update_feed", "collected_at", "fixture_date", "e_pre_jogo", "status", "motivo", "snapshot_hash"],
+    "provider": "ausente",
+    "indices": ["idx_odds_hist_fixture", "idx_odds_hist_familia"],
+    "hash_v1_campos": ["fixture_id", "coleta_tipo", "bookmaker", "bet_name", "bet_id", "familia", "subfamilia", "lado", "linha", "value_feed", "odd(round6)", "suspended(int)", "status"]
+  },
+  "schema_depois": {
+    "colunas": ["id", "provider", "fixture_id", "coleta_tipo", "bookmaker", "bet_name", "bet_id", "familia", "subfamilia", "lado", "linha", "value_feed", "odd", "suspended", "update_feed", "collected_at", "fixture_date", "e_pre_jogo", "status", "motivo", "snapshot_hash"],
+    "provider": "TEXT NOT NULL",
+    "indices": ["idx_odds_hist_fixture", "idx_odds_hist_familia", "idx_odds_hist_provider"],
+    "hash_v2_campos": ["provider", "fixture_id", "coleta_tipo", "bookmaker", "bet_name", "bet_id", "familia", "subfamilia", "lado", "linha", "value_feed", "odd(round6)", "suspended(int)", "status"],
+    "user_version": 2
+  },
+  "estrategia_hash": {
+    "versao": "V2",
+    "funcao_unica": "_hash_identidade",
+    "provider_primeiro": true,
+    "recompute_em_transacao": true,
+    "rollback_em_falha": true,
+    "bijecao_V1_V2_segura": "todos os V1 distintos => todos os V2 distintos (V2 = V1 + 1 campo)",
+    "dedup_pos_migracao": {"inseridos": 0, "duplicados": 317972, "consumo_api": 0}
+  },
+  "provider_legado": {
+    "valor_canonico": "api_football",
+    "justificativa": "unico provider integrado quando os registros foram produzidos (auditoria 5F-B)",
+    "nao_usado": ["unknown", "legacy", "API"]
+  },
+  "migracao": {
+    "idempotente": true,
+    "marker": "PRAGMA user_version (0->2)",
+    "alter_backfill": "ALTER TABLE ... ADD COLUMN provider TEXT NOT NULL DEFAULT 'api_football'",
+    "recompute_deterministic": true,
+    "linhas_perdidas": 0,
+    "linhas_duplicadas": 0
+  },
+  "adapters": {
+    "implementados": ["api_football"],
+    "classe": "APIFootballOddsProvider",
+    "reusa": "src/api_client.py",
+    "registry": {"api_football": "APIFootballOddsProvider"},
+    "nao_implementados": ["the_odds_api", "sportmonks", "apifootball", "5dollar", "football_data", "statsbomb"]
+  },
+  "abstracao": {
+    "tipo": "Protocol",
+    "nome": "OddsProvider",
+    "resolve": "resolve_provider(obj)",
+    "provider_inexistente": "ValueError explicito"
+  },
+  "proveniencia": {
+    "provider_vs_bookmaker_distintos": true,
+    "campos": ["provider", "bookmaker", "fixture_id", "bet_name", "bet_id", "familia", "subfamilia", "lado", "linha", "value_feed", "odd", "suspended", "update_feed", "collected_at", "fixture_date", "e_pre_jogo", "status", "motivo", "snapshot_hash"]
+  },
+  "testes": {
+    "novos": 20,
+    "existentes_modulo": 38,
+    "total_modulo": 58,
+    "suite_completa": {"passed": 565, "skipped": 18, "failed": 0},
+    "tempo_s": 68,
+    "baseline_preservado": true,
+    "cobertura_migracao": [
+      "banco antigo sem provider migra",
+      "legados recebem api_football",
+      "qtd linhas idem",
+      "nenhuma odd muda",
+      "nenhum timestamp muda",
+      "nenhuma fixture muda",
+      "nenhuma linha muda",
+      "provider nao nulo (rejeitado)",
+      "mesmo provider + mesmo snapshot = dedup",
+      "provider diferente + mesmo factual = dois registros",
+      "mudanca de odd = novo snapshot",
+      "hash V2 inclui provider",
+      "migracao idempotente",
+      "repetir init nao altera banco",
+      "rollback preserva DB em falha simulada",
+      "adapter identifica provider",
+      "registry resolve api_football",
+      "provider inexistente falha explicito",
+      "coletor antigo continua funcionando",
+      "nenhuma regra do motor alterada"
+    ]
+  },
+  "motor": {
+    "alterado": false,
+    "diff_vs_1cc2d6e": "vazio para todos os modulos de decisao",
+    "modulos_verificados_nao_alterados": [
+      "analysis.py", "politica_aprovacao.py", "policy.py", "settlement.py",
+      "calibration.py", "backtest.py", "prejogo_opportunity.py", "odds.py",
+      "identity.py", "cache.py", "config.py", "api_client.py",
+      "live_pressure.py", "ao_vivo.py", "app.py"
+    ],
+    "regras_congeladas": {
+      "PROB_MIN_APROVAR": 0.70,
+      "PROB_MAX_APROVAR": 0.97,
+      "CONF_MIN_TOP1": 0.60,
+      "convencao_cartoes": "amarelo=1, vermelho=2"
+    }
+  },
+  "arquivos_alterados": {
+    "src/odds_coleta.py": "+276/-35",
+    "tests/test_odds_coleta.py": "+352",
+    "docs/ETAPA_5FC_FUNDACAO_MULTIPROVIDER.md": "novo",
+    "docs/etapa5fc_fundacao_multiprovider.json": "novo"
+  },
+  "riscos": {
+    "novas_apis_integradas": false,
+    "chaves_configuradas": false,
+    "chamadas_externas": false,
+    "fallback_implementado": false,
+    "etapa_6_iniciada": false
+  },
+  "respostas_obrigatorias": {
+    "banco_pronto_multi_provider": "SIM",
+    "proveniencia_garantida": "SIM",
+    "api_football_funciona": "SIM",
+    "the_odds_api_adaptavel_proxima_etapa": "SIM",
+    "5dollar_adaptavel_proxima_etapa": "SIM",
+    "sportmonks_apifootball_sem_alterar_motor": "SIM",
+    "motor_intacto": "SIM",
+    "pronto_5fd": "SIM (infraestrutura); exige rotacao de API_KEY + credenciais + autorizacao explicita antes"
+  }
+}
