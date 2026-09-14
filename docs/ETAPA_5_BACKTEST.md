@@ -336,8 +336,9 @@ antigo removido ou enfraquecido (`test_suite_anterior_permancece_intacta`).
 
 ## 31. HASH DO COMMIT
 
-A ser registrado ao final: commit "etapa 5: implementar backtest dedicado e
-baseline" na branch `etapa-5-backtest`. (Hash preenchido no commit.)
+`9c4a90d` — "etapa 5: implementar backtest dedicado e baseline" na branch
+`etapa-5-backtest` (5 arquivos, 4186 inserções). Pai: `6f77423`. Sem merge em
+main, sem push, sem remote.
 
 ## 32. GIT STATUS FINAL
 
