@@ -224,15 +224,26 @@ prospectiva.
 
 ## 18. CALIBRAÇÃO (ENTRAR, por faixa de probabilidade predita)
 
-| faixa | previsões | taxa observada | Brier |
-|---|---|---|---|
-| 80–90% | 30 | 0.7667 | 0.175 |
-| 90–100% | 4.322 | 0.8889 | 0.060 |
+> **CORREÇÃO (Etapa 5B, somente documentação):** a versão original desta seção
+> relatava "superconfiança ~4 p.p." com base em observado 88.89% vs predito ~93%.
+> Esse número usava denominador **incluindo** casos NÃO AVALIÁVEL (215 missing na
+> faixa 90–100, majoritariamente cartões sem estatística final). O denominador
+> correto exclui o missing — o cálculo histórico do backtest NÃO foi alterado, só
+> a interpretação/documentação.
 
-**Interpretação:** na faixa 90–100% (predição média ~93%), o observado é 88.9% —
-** leve superconfiança** (~4 p.p. abaixo do predito). Na faixa 80–90% o observado
-(76.7%) fica próximo do piso. Brier baixo (0.06) na faixa dominante. Nada é
-"corrigido" — baseline congelado (FASE G/R).
+Denominador correto (settled, **excl. NÃO AVALIÁVEL**):
+
+| faixa | n ENTRAR | prob predita média | observado (excl NA) | gap obs−pred | Brier |
+|---|---|---|---|---|---|
+| 80–90% | 30 | 0.8961 | 0.7931 | −0.1030 (n pequeno) | 0.175 |
+| 90–100% | 4.322 | 0.9431 | 0.9355 | **−0.0076** | 0.060 |
+
+**Interpretação correta:** na faixa dominante 90–100%, predito médio ≈ 94,31%,
+observado ≈ 93,55% (excl. missing). Como observado < predito, a interpretação
+matemática é **ligeira superconfiança de ~0,76 p.p.** (o modelo superestima a
+probabilidade em menos de 1 ponto percentual) — e **não** ~4 p.p. A faixa 80–90
+tem só n=30 (insuficiente para inferência). Brier 0.060 na faixa dominante.
+Baseline congelado (FASE G/R): nenhum parâmetro corrigido, só a documentação.
 
 ## 19. TAXA DE ACERTO POR MERCADO (ENTRAR)
 
@@ -302,8 +313,10 @@ MLS 0.9419 (534), Allsvenskan 0.9478 (230), Primeira Liga 0.9474 (38), Eredivisi
 
 ## 27. REGRAS PARA INVESTIGAÇÃO FUTURA
 
-- Superconfiança ~4 p.p. na faixa 90–100% (observado 88.9% vs predito ~93%) —
-  investigar se Poisson 90min superestima caudas em ligas específicas.
+- Superconfiança ~0,76 p.p. na faixa 90–100% (observado 93,55% vs predito 94,31%,
+  excl. NÃO AVALIÁVEL) — magnitude pequena; investigar se Poisson 90min superestima
+  caudas em ligas específicas. (Versão anterior citava ~4 p.p. — artefato de
+  denominador com NÃO AVALIÁVEL; corrigido em Etapa 5B.)
 - Missing estrutural de cartões finais — viabilizar coleta antes de validar cartões.
 - Ligas de menor taxa (Equador/Série B/Uruguay) — investigar benchmark vs histórico.
 - LIVE_HT — executar baseline quando houver auditoria de frescor reproduzível.
@@ -352,7 +365,8 @@ Branch `etapa-5-backtest`. Arquivos novos: `src/backtest.py`,
 - **Sem ROI real**: 0 fixtures encerradas com odds pré-jogo no cache. Toda a
   evidência é de calibração (prob vs acerto), não de valor financeiro. Odd justa
   vs prob ≠ ROI realizado.
-- **Superconfiança ~4 p.p.** na faixa 90–100% — pode superestimar EV real.
+- **Superconfiança ~0,76 p.p.** na faixa 90–100% (excl. NÃO AVALIÁVEL) — pequena,
+  pode superestimar EV real marginalmente.
 - **Missing estrutural de cartões** (67% NÃO AVALIÁVEL nas aprovadas) — cartões
   não são validáveis nesta amostra.
 - **/odds/live** inconsistente (24/28 com valores na mineração vs 0/28 na auditoria)
@@ -367,7 +381,7 @@ Branch `etapa-5-backtest`. Arquivos novos: `src/backtest.py`,
 - Coletar odds pré-jogo prospectivamente para partidas que serão encerradas (ROI).
 - Popular `live_snapshot_history` (coleta prospectiva) para validar PRESSÃO 5/10/15.
 - Executar baseline LIVE_HT quando a auditoria de frescor for reproduzível.
-- Investigar superconfiança 90–100% por liga/mercado.
+- Investigar superconfiança 90–100% (~0,76 p.p., excl. missing) por liga/mercado.
 - Viabilizar coleta de cartões finais (missing estrutural).
 
 ## 35. RECOMENDAÇÃO DA PRÓXIMA ETAPA
@@ -387,10 +401,11 @@ otimização de parâmetros até houver ROI realizado que justifique.
 **A. O motor mostrou evidência suficiente para continuar?**
 **PARCIAL.** A calibração das aprovadas é forte em amostras maduras (gols 0.9452
 em 2.918, escanteios 0.8925 em 893, Brier 0.05–0.09), o que sustenta continuar em
-modo observação. **Mas** não há ROI real (0 odds em encerrados), há superconfiança
-~4 p.p. na faixa 90–100%, cartões com missing estrutural e RESULTADO/PRESSÃO
-experimentais. Evidência de calibração é suficiente para continuar observando;
-evidência de valor financeiro ainda não existe.
+modo observação. **Mas** não há ROI real (0 odds em encerrados), há ligeira
+superconfiança ~0,76 p.p. na faixa 90–100% (excl. NÃO AVALIÁVEL; ver seção 18
+corrigida), cartões com missing estrutural e RESULTADO/PRESSÃO experimentais.
+Evidência de calibração é suficiente para continuar observando; evidência de
+valor financeiro ainda não existe.
 
 **B. A pressão 5/10/15 já pode ser validada?**
 **NÃO.** Sem `live_snapshot_history` populada, não há snapshots temporais
@@ -404,11 +419,12 @@ RESULTADO/PRESSÃO já são experimentais por marcador. Nada é alterado sem ROI
 realizado que comprove.
 
 **D. Seguro iniciar futura otimização?**
-**NÃO.** Sem ROI realizado (0 odds em encerrados) e com superconfiança observada,
-otimizar parâmetros agora seria calibrar contra acerto sem saber se há valor
-financeiro — risco de overfitting a um proxy. A otimização só é segura após
-coleta prospectiva com odds reais produzindo ROI realizado e após investigar a
-superconfiança. Até lá: regras congeladas, baseline = referência.
+**NÃO.** Sem ROI realizado (0 odds em encerrados) e com ligeira superconfiança
+observada (~0,76 p.p., corrigido), otimizar parâmetros agora seria calibrar contra
+acerto sem saber se há valor financeiro — risco de overfitting a um proxy. A
+otimização só é segura após coleta prospectiva com odds reais produzindo ROI
+realizado e após investigar a superconfiança. Até lá: regras congeladas,
+baseline = referência.
 
 > PARE. Nenhum threshold alterado. Nenhuma regra promovida a validada. MCP não
 > tocado. Sem push. Sem merge em main.
