@@ -289,7 +289,8 @@ novos).
 
 ## 20. Hash do commit
 
-A ser registrado no commit da branch `etapa-5d-auditoria-cartoes`.
+`e0845e16b3956c9784f8889cb944c302145a8f5d` (branch `etapa-5d-auditoria-cartoes`,
+"etapa 5d: auditoria cirurgica dos dados de cartoes").
 
 ## 21. Branch
 
