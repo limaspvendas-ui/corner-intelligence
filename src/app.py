@@ -22,6 +22,8 @@ Uso:
     python -m src.app recomendacoesliquidar   (MODO OBSERVACAO: liquida pendentes via API)
     python -m src.app prejogoop "Time A x Time B"   (MODO OBSERVACAO: recomendacao pre-jogo)
     python -m src.app calibracao   (MODO OBSERVACAO: taxa real x prob estimada)
+    python -m src.app analisar "Time A x Time B"   (FECHAMENTO OPERACIONAL: saida oficial)
+    python -m src.app varredura [--data YYYY-MM-DD]  (FECHAMENTO OPERACIONAL: varredura por data)
 """
 
 from __future__ import annotations
@@ -528,6 +530,47 @@ def cmd_aovivopressao(args: argparse.Namespace) -> str:
     return format_pressure_windows(windows, snap=snap)
 
 
+def cmd_analisar(args: argparse.Namespace) -> str:
+    """FECHAMENTO OPERACIONAL: saída OFICIAL canônica de UM fixture.
+
+    Consome o motor existente (scan_pregame_opportunities, READ:
+    registrar=False, não congela recomendação) e roteia pelo status
+    estatístico de cada mercado. Apenas GOALS (APROVADO_PARA_PROXIMA_FASE)
+    vira oportunidade operacional. Demais mercados: observação ou
+    bloqueado. Não recalibra, não altera thresholds, não inventa
+    linha/odd, não converte ausência em zero. "NENHUMA OPORTUNIDADE
+    OPERACIONAL APROVADA" é resultado válido.
+
+    --json emite a saída canônica completa (SaidaOficial.to_dict()),
+    consumível por API/MCP/ChatGPT. Sem --json, emite resumo legível."""
+    from src.operacional import analisar_fixture, formatar_saida
+
+    saida = analisar_fixture(args.client, args.espec, registrar=False)
+    if getattr(args, "json", False):
+        import json as _json
+        return _json.dumps(saida.to_dict(), ensure_ascii=False, indent=2,
+                           default=str)
+    return formatar_saida(saida)
+
+
+def cmd_varredura(args: argparse.Namespace) -> str:
+    """FECHAMENTO OPERACIONAL: varredura oficial por data.
+
+    Busca fixtures da data -> filtra elegíveis (policy, não encerrado/
+    não ao vivo) -> executa motor oficial -> saída canônica por fixture
+    -> agrega oportunidades/observações/bloqueados. READ: não registra,
+    não altera histórico, não força aposta.
+
+    --json emite a saída canônica completa; sem --json, resumo legível."""
+    from src.operacional import varredura_data, formatar_varredura
+
+    res = varredura_data(args.client, getattr(args, "data", None))
+    if getattr(args, "json", False):
+        import json as _json
+        return _json.dumps(res, ensure_ascii=False, indent=2, default=str)
+    return formatar_varredura(res)
+
+
 def cmd_oddscoleta(args: argparse.Namespace) -> str:
     """ETAPA 5F: coleta PROSPECTIVA de odds reais (pre-match e live),
     SEPARADA do motor. NAO altera probabilidade/aprovacao/thresholds/regra
@@ -870,6 +913,29 @@ def build_parser() -> argparse.ArgumentParser:
     p_mp.add_argument("--sport-key", default="soccer_epl",
                       help="sport_key The Odds API (default soccer_epl)")
     p.set_defaults(fn=cmd_oddscoleta)
+
+    # FECHAMENTO OPERACIONAL: saída oficial canônica + gates de mercado
+    p = sub.add_parser(
+        "analisar",
+        help="FECHAMENTO OPERACIONAL: saída OFICIAL canônica de UM fixture "
+             "(consome o motor; apenas GOALS aprovado vira oportunidade "
+             "operacional; demais mercados em observação/bloqueado)",
+    )
+    p.add_argument("espec", help='"Time A x Time B"')
+    p.add_argument("--json", action="store_true",
+                   help="emite a saída canônica completa (SaidaOficial)")
+    p.set_defaults(fn=cmd_analisar)
+
+    p = sub.add_parser(
+        "varredura",
+        help="FECHAMENTO OPERACIONAL: varredura OFICIAL por data "
+             "(jogos elegíveis -> motor -> saída canônica agregada)",
+    )
+    p.add_argument("--data", default=None,
+                   help="data no formato YYYY-MM-DD (padrão: hoje)")
+    p.add_argument("--json", action="store_true",
+                   help="emite a saída canônica completa")
+    p.set_defaults(fn=cmd_varredura)
 
     return parser
 
