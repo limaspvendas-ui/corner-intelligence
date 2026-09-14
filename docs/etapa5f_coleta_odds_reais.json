@@ -1,0 +1,71 @@
+{
+  "etapa": "5F",
+  "modulo": "src/odds_coleta.py",
+  "fase1_auditoria": {
+    "odds_pre_no_cache": 86,
+    "odds_live_no_cache": 28,
+    "bookmakers_distintos": 14,
+    "bookmakers": [
+      "10Bet",
+      "1xBet",
+      "888Sport",
+      "Bet365",
+      "BetVictor",
+      "Betano",
+      "Betfair",
+      "Dafabet",
+      "Marathonbet",
+      "Pinnacle",
+      "SBO",
+      "Superbet",
+      "Unibet",
+      "William Hill"
+    ],
+    "odd_real_null_pct": 1.0,
+    "odd_real_pos_total": 0,
+    "entrar_total": 4352,
+    "entrar_com_odd_real_pos": 0,
+    "causa_odd_real_null": "desalinhamento temporal: intersecao=0 entre fixtures com /odds no cache e fixtures do backtest (odds coletadas 06-12 Set; backtest termina 06-Set 19:30 UTC). NAO bug de matching (extrair_odd_real funciona).",
+    "live_odds_disponivel": true,
+    "live_odds_observacao": "24/28 entries com odds reais; 5125 valores suspended:false vs 1949 suspended:true. Inutilizacao apenas por design no CacheClient (retorna []), nao por conteudo."
+  },
+  "fase13_ingestao_cache": {
+    "pre_entries": 78,
+    "live_entries": 24,
+    "snapshots_construidos": 317972,
+    "inseridos": 317951,
+    "consumo_api": 0
+  },
+  "odds_snapshot_history_status": {
+    "total_snapshots": 317951,
+    "fixtures_distintos": 89,
+    "por_coleta_tipo": {
+      "live": 7053,
+      "pre_match": 310898
+    },
+    "por_familia": {
+      "UNMAPPED": 278765,
+      "cartoes": 1166,
+      "escanteios": 8114,
+      "gols": 13713,
+      "resultado": 16193
+    },
+    "por_status": {
+      "INVALID": 1553,
+      "OK": 39144,
+      "SUSPENDED": 1514,
+      "UNMAPPED": 275740
+    },
+    "snapshots_pre_jogo": 298187
+  },
+  "respostas_obrigatorias": {
+    "coleta_pre_match_implementada": "SIM",
+    "odds_fatuais_e_timestampadas": "SIM",
+    "historico_append_only": "SIM",
+    "risco_leakage_identificado": "SIM",
+    "live_odds_disponiveis": "PARCIAL",
+    "alguma_regra_do_motor_alterada": "NAO",
+    "roi_ja_pode_ser_validado": "NAO",
+    "etapa6_iniciada": "NAO"
+  }
+}

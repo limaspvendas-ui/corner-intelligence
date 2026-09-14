@@ -528,6 +528,74 @@ def cmd_aovivopressao(args: argparse.Namespace) -> str:
     return format_pressure_windows(windows, snap=snap)
 
 
+def cmd_oddscoleta(args: argparse.Namespace) -> str:
+    """ETAPA 5F: coleta PROSPECTIVA de odds reais (pre-match e live),
+    SEPARADA do motor. NAO altera probabilidade/aprovacao/thresholds/regra
+    alguma. NAO calcula ROI. Persiste cotacoes factuais timestampadas em
+    odds_snapshot_history (append-only, nunca sobrescreve).
+
+    Subcomandos:
+      status  -- estado do odds_snapshot_history (append-only).
+      cache   -- ingere as odds JA existentes no api_cache (0 chamadas a API).
+      coleta  -- coleta UM fixture na API (/odds; +/odds/live com --live).
+
+    AUTO DESABILITADO por padrao: a coleta periodica exige --intervalo > 0
+    e --max-iter; sem eles e one-shot. Mercado irreconhecivel => UNMAPPED;
+    odd invalida => registrada com motivo, nunca zero."""
+    from src.odds_coleta import (
+        OddsSnapshotStore,
+        coletar_fixture,
+        coletar_periodico,
+        format_status,
+        ingerir_cache,
+    )
+
+    store = OddsSnapshotStore()
+    sub = args.subcmd
+
+    if sub == "status":
+        return format_status(store.status())
+
+    if sub == "cache":
+        res = ingerir_cache(store, dry_run=args.dry_run)
+        modo = "DRY-RUN (nao gravado)" if args.dry_run else "GRAVADO"
+        return (
+            f"[FATO] ingestao do api_cache para odds_snapshot_history ({modo}).\n"
+            f"  entries /odds pre-match: {res['pre_entries']}\n"
+            f"  entries /odds/live: {res['live_entries']}\n"
+            f"  snapshots construidos: {res['snapshots']}\n"
+            f"  inseridos: {res['inseridos']} | duplicados (dedup hash): "
+            f"{res['duplicados']}\n"
+            f"  consumo de API: {res['consumo_api']} chamadas (0 - so cache).\n"
+            "[CALCULO] ROI: NAO CALCULADO. Etapa 6: BLOQUEADA."
+        )
+
+    if sub == "coleta":
+        fx = args.fixture
+        if args.intervalo and args.intervalo > 0 and args.max_iter:
+            r = coletar_periodico(
+                args.client, store, [fx],
+                intervalo=args.intervalo, max_iter=args.max_iter, live=args.live,
+            )
+            return (
+                f"[FATO] coleta periodica do fixture {fx} encerrada: "
+                f"{r['passadas']} passada(s) | {r['inseridos']} inseridos | "
+                f"{r['duplicados']} duplicados | consumo API "
+                f"{r['consumo_api']} chamadas. Historico append-only "
+                f"preservado (odds_snapshot_history)."
+            )
+        r = coletar_fixture(args.client, store, fx, live=args.live)
+        return (
+            f"[FATO] coleta one-shot do fixture {fx}: "
+            f"{r['snapshots']} snapshots | {r['inseridos']} inseridos | "
+            f"{r['duplicados']} duplicados | consumo API "
+            f"{r['consumo_api']} chamada(s). Historico append-only "
+            f"preservado (odds_snapshot_history)."
+        )
+
+    return "Subcomando desconhecido. Use: status, cache ou coleta."
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="corner-intelligence",
@@ -732,6 +800,29 @@ def build_parser() -> argparse.ArgumentParser:
              "confianca, mercado, tipo e faixa de minuto)",
     )
     p.set_defaults(fn=cmd_calibracao)
+
+    p = sub.add_parser(
+        "oddscoleta",
+        help="ETAPA 5F: coleta prospectiva de odds reais (pre-match e live, "
+             "append-only, separada do motor; sem ROI)",
+    )
+    sp = p.add_subparsers(dest="subcmd", required=True)
+    sp.add_parser("status", help="estado do odds_snapshot_history (append-only)")
+    p_cache = sp.add_parser(
+        "cache", help="ingere as odds ja existentes no api_cache (0 chamadas API)")
+    p_cache.add_argument("--dry-run", action="store_true",
+                         help="mostra o que seria inserido sem gravar")
+    p_col = sp.add_parser(
+        "coleta", help="coleta UM fixture na API (/odds; +/odds/live com --live)")
+    p_col.add_argument("fixture", type=int, help="fixture_id")
+    p_col.add_argument("--live", action="store_true",
+                       help="coleta tambem /odds/live (separado de pre-match)")
+    p_col.add_argument("--intervalo", type=int, default=0,
+                       help="intervalo entre passadas em segundos (periodica; "
+                            "padrao 0 = one-shot)")
+    p_col.add_argument("--max-iter", type=int, default=None,
+                       help="limite de passadas (periodica; exige --intervalo>0)")
+    p.set_defaults(fn=cmd_oddscoleta)
 
     return parser
 
