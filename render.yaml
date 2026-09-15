@@ -1,0 +1,31 @@
+# Render deploy config — Corner Intelligence API oficial (integração ChatGPT)
+# Serviço web (FastAPI + uvicorn). Camada fina sobre o motor (SaidaOficial).
+# NÃO é um segundo motor; somente leitura; sem aposta.
+#
+# Pré-requisitos (configurar no dashboard Render > Environment):
+#   API_KEY                       (API-Football v3, api-sports.io)
+#   THE_ODDS_API_KEY              (opcional, coleta de odds)
+#   SPORTMONKS_API_TOKEN          (opcional)
+#   APIFOOTBALL_COM_API_KEY       (opcional)
+#   FIVE_DOLLAR_FOOTBALL_API_KEY  (opcional)
+#   FOOTBALL_DATA_API_KEY         (opcional)
+# Nunca versionar .env / segredos.
+services:
+  - type: web
+    name: corner-intelligence-api
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.api_server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      # Segredos: definir via dashboard Render (NUNCA aqui).
+      # - key: API_KEY
+      #   sync: false
+    # OpenAPI schema (para ChatGPT Custom GPT): https://<service>.onrender.com/openapi.json

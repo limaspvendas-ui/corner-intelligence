@@ -3,3 +3,9 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 pytest>=8.0.0
+
+# Servidor API oficial (integracao ChatGPT via HTTP/OpenAPI) -- src/api_server.py
+# Aditivo: o motor (src/) funciona sem estas; necessarias apenas para servir a API.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
