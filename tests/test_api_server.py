@@ -19,6 +19,10 @@ Princípios (A-M):
   K) dados stale não aparecem como live fresco.
   L) nenhum endpoint executa aposta.
   M) mesma entrada oficial produz mesma decisão Claude Code x API.
+  N) CARDS em MODO TESTE por override (status NÃO_AVALIÁVEL preservado).
+  O) varredura_prelive expõe oportunidades de cartões separadamente.
+  P) /api/partida-dados é FACTUAL (sem probabilidade; NULL preservado).
+  Q) /api/teste-coleta valida coleta factual (ausência reportada).
 """
 from __future__ import annotations
 
@@ -373,3 +377,182 @@ def test_m_mesma_decisao_cc_x_api(client, monkeypatch):
     assert api_opp["status_estatistico"] == cc_opp["status_estatistico"]
     # DIVERGÊNCIA = 0
     assert api_opp == cc_opp
+
+
+# ----------------------------------------------------------------------
+# N. CARDS em MODO TESTE por override (status estatístico preservado)
+# ----------------------------------------------------------------------
+def test_n_cards_modo_teste_override(client):
+    r = client.get("/api/status-mercados")
+    d = r.json()
+    c = [m for m in d["data"]["mercados"] if m["mercado"] == "cartoes"][0]
+    # status ESTATÍSTICO real preservado (não promovido)
+    assert c["status_estatistico"] == "NÃO_AVALIÁVEL"
+    assert c["status_estatistico"] != APROVADO_PROX
+    # operacional = MODO TESTE por override, rotulado
+    assert c["status_operacional"] == (
+        "HABILITADO_EM_MODO_TESTE_POR_OVERRIDE_DO_USUARIO")
+    assert c["origem_operacional"] == "override_usuario"
+    assert c["modo_teste"] is True
+    assert c["rotulo_override"] == (
+        "MODO TESTE — OVERRIDE AUTORIZADO PELO USUÁRIO — "
+        "NÃO VALIDADO ESTATISTICAMENTE")
+    assert c["override_operador"] == "true"
+    assert c["timestamp_override"] is not None
+    # resumo textual coerente
+    assert "MODO TESTE" in d["data"]["resumo"]["CARDS"]
+    # health também expõe cards
+    h = client.get("/health").json()
+    assert h["data"]["prelive"]["cards"]["modo_teste"] is True
+    assert h["data"]["prelive"]["cards"]["status"] == "NÃO_AVALIÁVEL"
+
+
+# ----------------------------------------------------------------------
+# O. varredura_prelive expõe oportunidades de cartões separadamente
+# ----------------------------------------------------------------------
+def test_o_varredura_prelive_expoes_cartoes(client, monkeypatch):
+    _patch_client(monkeypatch)
+    opps = [
+        {"mercado": "gols", "linha": "Over 2.5 gols", "prob": 0.93,
+         "confianca": 0.75, "fixture_id": 9001},
+        {"mercado": "cartoes",
+         "linha": "Over 3.5 cartoes (amarelo=1, vermelho=2) (total do jogo)",
+         "prob": 0.90, "confianca": 0.70, "fixture_id": 9001,
+         "modo_teste": True,
+         "rotulo_override": ("MODO TESTE — OVERRIDE AUTORIZADO PELO "
+                             "USUÁRIO — NÃO VALIDADO ESTATISTICAMENTE")},
+    ]
+    monkeypatch.setattr(
+        "src.api_server.varredura_data",
+        lambda c, date: {
+            "data": date or "hoje", "generated_at": "2026-09-15 10:00:00",
+            "engine_version": VERSAO_PREJOGO_OP,
+            "camada_version": "op", "projeto_hash": "h",
+            "fixtures_considerados": 5, "fixtures_elegiveis": 1,
+            "fixtures_inelegiveis": [],
+            "operational_opportunities": opps,
+            "observations": [], "blocked": [],
+            "nenhum_aprovado": False, "mensagem_nenhum": None,
+            "provenance": {},
+        })
+    r = client.get("/api/varredura-prelive")
+    d = r.json()["data"]
+    assert len(d["oportunidades_goals"]) == 1
+    assert len(d["oportunidades_cartoes"]) == 1
+    card = d["oportunidades_cartoes"][0]
+    assert card["modo_teste"] is True
+    assert "NÃO VALIDADO ESTATISTICAMENTE" in card["rotulo_override"]
+
+
+# ----------------------------------------------------------------------
+# P. /api/partida-dados é FACTUAL (sem probabilidade; NULL preservado)
+# ----------------------------------------------------------------------
+def _fx_ns(fixture_id=9001):
+    return SimpleNamespace(
+        fixture_id=fixture_id, date="2026-09-15T15:00:00", status="NS",
+        elapsed=None, league_id=39, league_name="Premier League",
+        round="Regular Season - 5", season=2026,
+        home_team_id=10, home_team_name="Casa FC",
+        away_team_id=20, away_team_name="Fora FC",
+        goals_home=None, goals_away=None, venue="Londres",
+        is_finished=False, is_live=False,
+    )
+
+
+def test_p_partida_dados_factual_sem_probabilidade(client, monkeypatch):
+    _patch_client(monkeypatch)
+    monkeypatch.setattr("src.fixtures.get_fixture_by_id",
+                        lambda c, fid: _fx_ns(fid))
+    monkeypatch.setattr(
+        "src.api_server.jogo_elegivel",
+        lambda lid, ln, h, a, dados=None: (True, ""))
+    from src.exceptions import DataUnavailableError
+
+    def _raise(client, fixture):
+        raise DataUnavailableError("sem estatísticas na fonte")
+    monkeypatch.setattr("src.match_stats.fetch_match_stats", _raise)
+    monkeypatch.setattr(
+        "src.match_stats.fetch_team_history",
+        lambda c, tid, last=20, team_name="": ([], 0))
+    r = client.get("/api/partida-dados?fixture_id=9001")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["success"] is True
+    facts = d["data"]["facts"]
+    assert facts["fixture_id"] == 9001
+    assert facts["home"] == "Casa FC"
+    assert facts["score"] is None            # NULL preservado
+    assert facts["elegivel_universo"] is True
+    # estatísticas indisponíveis: reportadas, nunca preenchidas
+    assert facts["estatisticas"]["disponivel"] is False
+    assert "dado não disponível" in facts["estatisticas"]["motivo"]
+    # FACTUAL: nenhum campo de probabilidade/decisão
+    assert "prob" not in facts
+    assert "probabilidade" not in facts
+    assert "decisao_oficial" not in facts
+    assert "confianca" not in facts
+
+
+def test_p2_partida_dados_fixture_nao_encontrado(client, monkeypatch):
+    _patch_client(monkeypatch)
+    monkeypatch.setattr("src.fixtures.get_fixture_by_id",
+                        lambda c, fid: None)
+    r = client.get("/api/partida-dados?fixture_id=1")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["success"] is False
+    assert "fixture não encontrado" in d["erro"]
+
+
+# ----------------------------------------------------------------------
+# Q. /api/teste-coleta valida coleta factual
+# ----------------------------------------------------------------------
+def test_q_teste_coleta_valida_coleta(client, monkeypatch):
+    _patch_client(monkeypatch)
+    monkeypatch.setattr("src.fixtures.get_fixtures_today",
+                        lambda c, on_date=None: [_fx_ns()])
+    monkeypatch.setattr(
+        "src.api_server.jogo_elegivel",
+        lambda lid, ln, h, a, dados=None: (True, ""))
+    from src.exceptions import DataUnavailableError
+
+    def _raise(client, fixture):
+        raise DataUnavailableError("pré-jogo: sem estatísticas")
+    monkeypatch.setattr("src.match_stats.fetch_match_stats", _raise)
+
+    game = SimpleNamespace(
+        fixture_id=8001, date="2026-09-10T15:00:00", league="Premier League",
+        round="Regular Season - 4", status="FT", opponent="Adversario FC",
+        played_at_home=True, corners_for=6, corners_against=4,
+        corners_total=10, corners_for_1st_half=None,
+        corners_against_1st_half=None, corners_for_2nd_half=None,
+        corners_against_2nd_half=None, goals_for=2, goals_against=1,
+        shots_for=12, shots_on_goal_for=5, possession_for=55,
+        yellow_for=2, red_for=None, yellow_against=3, red_against=None,
+    )
+    monkeypatch.setattr(
+        "src.match_stats.fetch_team_history",
+        lambda c, tid, last=1, team_name="": ([game], 0))
+    r = client.get("/api/teste-coleta")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["success"] is True
+    res = d["data"]
+    assert res["fixtures_elegiveis"] == 1
+    assert res["coleta_estatisticas"]["disponivel"] is False
+    assert "dado não disponível" in res["coleta_estatisticas"]["motivo"]
+    # histórico coletado factualmente; red_cards NULL preservado
+    assert res["coleta_historico_home"]["disponivel"] is True
+    assert res["coleta_historico_home"]["n_jogos"] == 1
+    # FACTUAL: sem probabilidade
+    assert "prob" not in res
+
+
+def test_q2_teste_coleta_sem_jogos(client, monkeypatch):
+    _patch_client(monkeypatch)
+    monkeypatch.setattr("src.fixtures.get_fixtures_today",
+                        lambda c, on_date=None: [])
+    r = client.get("/api/teste-coleta")
+    assert r.status_code == 200
+    d = r.json()["data"]
+    assert d["resultado"] == "SEM_JOGO_ELEGIVEL"

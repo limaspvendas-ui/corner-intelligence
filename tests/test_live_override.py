@@ -315,7 +315,9 @@ def test_m_corners_prelive_preservado():
 # ----------------------------------------------------------------------
 def test_n_motor_prelive_intacto():
     assert VERSAO_PREJOGO_OP == "prejogo-op-1.0-observacao"
-    assert VERSAO_CAMADA_OPERACIONAL == "operacional-1.1-override"
+    # Camada estendida em 15/09/2026 (CARTÕES em MODO TESTE) — o MOTOR
+    # matemático permanece intacto; somente a versão da camada muda.
+    assert VERSAO_CAMADA_OPERACIONAL == "operacional-1.2-cards-teste"
     v = VarreduraPreJogo(espec="x", fixture=None, motivo_sem_jogo="sem jogo")
     s = _construir_saida(v, "2026-09-14 20:30:00")
     assert s.mode == "prejogo"

@@ -10,5 +10,8 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27
 
-# Servidor MCP oficial (mcp_server.py) -- camada fina sobre a API canonica.
+# Servidor MCP oficial -- camada fina de acesso sobre a API canonica:
+#   - src/mcp_server.py (9 ferramentas oficiais; montado no MESMO servico em /mcp)
+#   - mcp_server.py      (proxy standalone sobre a API HTTP; retries para cold start)
+# Fixado em v1: a API v2 renomeou FastMCP (usada por ambos os servidores MCP).
 mcp>=1.9.0,<2.0.0

@@ -5,9 +5,14 @@ sinteticas e exercita _construir_saida (funcao pura da saida do motor).
 
 Principios validados:
   - Apenas GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade operacional.
-  - RESULTADO/CORNERS (EM_OBSERVAÇÃO) viram observação, nunca operacional.
-  - CARDS (NÃO_AVALIÁVEL) e PRESSÃO/ODDS (BLOQUEADO) viram bloqueados.
+  - RESULTADO (EM_OBSERVAÇÃO) vira observação, nunca operacional.
+  - CORNERS (EM_OBSERVAÇÃO) vira operacional por OVERRIDE do operador.
+  - CARDS vira operacional EM MODO TESTE por override (15/09/2026),
+    rotulado como NÃO VALIDADO ESTATISTICAMENTE; status estatístico
+    NÃO_AVALIÁVEL preservado.
+  - PRESSÃO/ODDS (BLOQUEADO) viram bloqueados.
   - NULL != ZERO: dado insuficiente => NÃO_AVALIÁVEL, nunca zero inventado.
+  - Override NÃO cria sinal: sem aprovação do motor => observação.
   - Mesma entrada => mesma decisão (determinismo).
   - A camada NÃO altera prob/confianca/linha do motor (passa direto).
   - Saída tem versão/timestamp/provenância.
@@ -158,15 +163,80 @@ def test_d_corners_sinal_operacional_por_override():
 
 
 # ----------------------------------------------------------------------
-# E. CARDS -> NÃO_AVALIÁVEL (blocked)
+# E. CARDS -> operacional em MODO TESTE por override (status NAO_AVAL
+#    preservado; rotulado como NÃO VALIDADO ESTATISTICAMENTE)
 # ----------------------------------------------------------------------
-def test_e_cards_bloqueado_nao_avaliavel():
-    saida = _saida([_av("cartoes", "Over 3.5 cartoes", 0.90, 0.70)])
+def test_e_cards_modo_teste_por_override():
+    """CARTÕES aprovado pelo motor -> operacional em MODO TESTE por
+    override autorizado do operador (15/09/2026). O status estatístico
+    real (NÃO_AVALIÁVEL) é preservado -- override NÃO é aprovação
+    estatística e a entrada é rotulada como tal."""
+    saida = _saida([_av("cartoes", "Over 3.5 cartoes (total do jogo)",
+                         0.90, 0.70)])
+    assert len(saida.operational_opportunities) == 1
+    o = saida.operational_opportunities[0]
+    assert o["mercado"] == "cartoes"
+    assert o["decisao_oficial"] == "ENTRAR"
+    assert o["aprovada_motor"] is True
+    # status estatístico real PRESERVADO (não promovido)
+    assert o["status_estatistico"] == NAO_AVAL
+    # origem da habilitação = override, não estatístico
+    assert o["origem_operacional"] == "override_usuario"
+    assert o["status_operacional"] == (
+        "HABILITADO_EM_MODO_TESTE_POR_OVERRIDE_DO_USUARIO")
+    # MODO TESTE rotulado: nunca apresentado como aprovado
+    assert o["modo_teste"] is True
+    assert o["rotulo_override"] == (
+        "MODO TESTE — OVERRIDE AUTORIZADO PELO USUÁRIO — "
+        "NÃO VALIDADO ESTATISTICAMENTE")
+    # auditável: timestamp + motivo do override
+    assert o["timestamp_override"] is not None
+    assert o["motivo_override"] is not None
+
+
+def test_e2_cards_override_nao_cria_sinal():
+    """Override de CARTÕES NÃO força aposta: motor avaliou mas NÃO aprovou
+    => observação (nunca operacional). 'SEM OPORTUNIDADE' é válido."""
+    saida = _saida(
+        aprovadas=[],
+        avaliacoes=[_av("cartoes", "Over 3.5 cartoes", 0.55, 0.40)],
+    )
     assert saida.operational_opportunities == []
-    blk = [b for b in saida.blocked if b["mercado"] == "cartoes"]
-    assert len(blk) == 1
-    assert blk[0]["status_estatistico"] == NAO_AVAL
-    assert blk[0]["decisao_oficial"] == "NAO_AVALIAVEL"
+    assert saida.nenhum_aprovado is True
+    obs = [o for o in saida.observations if o["mercado"] == "cartoes"]
+    assert len(obs) == 1
+    assert obs[0]["aprovada_motor"] is False
+    assert obs[0]["decisao_oficial"] == "OBSERVACAO"
+    assert obs[0]["status_operacional"] is None
+    assert obs[0]["origem_operacional"] is None
+
+
+def test_e3_cards_status_estatistico_preservado_no_registro():
+    """STATUS_MERCADOS (registro estatístico) NÃO é alterado pelo
+    override: cartões permanece NÃO_AVALIÁVEL."""
+    from src.operacional import OVERRIDE_OPERACIONAL
+
+    assert STATUS_MERCADOS["cartoes"]["status"] == NAO_AVAL
+    ov = OVERRIDE_OPERACIONAL["cartoes"]
+    # o override declara e preserva o status estatístico real
+    assert ov["status_estatistico"] == NAO_AVAL
+    assert ov["modo_teste"] == "true"
+    assert ov["decisao_humana"] == "true"
+    assert ov["timestamp_override"]
+
+
+def test_e4_goals_sem_modo_teste_corners_sem_modo_teste():
+    """Apenas CARTÕES roteia em MODO TESTE; GOALS (estatístico) e CORNERS
+    (override pleno) não carregam o rótulo de modo teste."""
+    saida = _saida([
+        _av("gols", "Over 2.5 gols", 0.93, 0.75),
+        _av("escanteios", "Over 9.5 escanteios", 0.91, 0.68),
+        _av("cartoes", "Over 3.5 cartoes", 0.90, 0.70),
+    ])
+    by_mercado = {o["mercado"]: o for o in saida.operational_opportunities}
+    assert by_mercado["gols"]["modo_teste"] is False
+    assert by_mercado["escanteios"]["modo_teste"] is False
+    assert by_mercado["cartoes"]["modo_teste"] is True
 
 
 # ----------------------------------------------------------------------
@@ -345,8 +415,9 @@ def test_rota_mercado_corners_operacional_por_override():
     assert _rota_mercado("gols") == "operational"
     # resultado sem override => observação
     assert _rota_mercado("resultado") == "observation"
-    # cards => bloqueado
-    assert _rota_mercado("cartoes") == "blocked"
+    # cards => operacional apenas por override em MODO TESTE (status
+    # estatístico NÃO_AVALIÁVEL preservado)
+    assert _rota_mercado("cartoes") == "operational"
 
 
 def test_origem_operacional_distinta_goals_vs_corners():

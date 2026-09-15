@@ -54,7 +54,10 @@ from src.validacao_multifonte import (
 # formato de saída). O motor continua em VERSAO_PREJOGO_OP.
 # operacional-1.1-override: habilitação operacional de CORNERS por override
 # explícito do operador, preservando o status estatístico real (EM_OBSERVAÇÃO).
-VERSAO_CAMADA_OPERACIONAL = "operacional-1.1-override"
+# operacional-1.2-cards-teste: CARTÕES habilitado em MODO TESTE por override
+# explícito do operador (15/09/2026) — rotulado como NÃO VALIDADO
+# ESTATISTICAMENTE; status estatístico real (NÃO_AVALIÁVEL) preservado.
+VERSAO_CAMADA_OPERACIONAL = "operacional-1.2-cards-teste"
 
 # Origem da habilitação operacional (distingue aprovação estatística de
 # override do operador -- nunca chamar override de aprovação estatística).
@@ -62,6 +65,13 @@ ORIGEM_ESTATISTICO = "estatistico"
 ORIGEM_OVERRIDE = "override_usuario"
 STATUS_OP_ESTATISTICO = "HABILITADO_ESTATISTICAMENTE"
 STATUS_OP_OVERRIDE = "HABILITADO_POR_OVERRIDE_DO_USUARIO"
+# MODO TESTE (CARTÕES): habilitação operacional SOMENTE para
+# teste/processamento/coleta/auditoria. NUNCA é aprovação estatística.
+STATUS_OP_MODO_TESTE = "HABILITADO_EM_MODO_TESTE_POR_OVERRIDE_DO_USUARIO"
+ROTULO_MODO_TESTE = (
+    "MODO TESTE — OVERRIDE AUTORIZADO PELO USUÁRIO — "
+    "NÃO VALIDADO ESTATISTICAMENTE"
+)
 
 # ----------------------------------------------------------------------
 # 3. REGISTRO OFICIAL DE STATUS DOS MERCADOS
@@ -139,6 +149,7 @@ OVERRIDE_OPERACIONAL: dict[str, dict[str, str]] = {
         "status_estatistico": EM_OBS,  # preservado -- NÃO é aprovação estatística
         "origem": ORIGEM_OVERRIDE,
         "decisao_humana": "true",
+        "modo_teste": "false",
         "timestamp_override": "2026-09-14T00:00:00Z",
         "motivo": (
             "drift temporal confirmado (hit 0.927->0.875 pos-cutoff "
@@ -147,6 +158,42 @@ OVERRIDE_OPERACIONAL: dict[str, dict[str, str]] = {
             "4 candidatos testados, NENHUM passou nos 8 criterios "
             "estatisticos; operador habilita operacionalmente por decisao "
             "explicita, preservando status estatistico real (EM_OBSERVAÇÃO)"
+        ),
+    },
+    # ------------------------------------------------------------------
+    # CARTÕES — MODO TESTE (15/09/2026). AUTORIZAÇÃO EXPRESSA DO OPERADOR.
+    # Habilita o mercado de cartões a ser PROCESSADO pelo motor oficial e
+    # gerar SaidaOficial em MODO TESTE. NÃO é aprovação estatística: o
+    # status estatístico real (NÃO_AVALIÁVEL, limitação estrutural da
+    # fonte: red_cards NULL em 207/207 partidas da amostra 5D) é
+    # PRESERVADO em STATUS_MERCADOS (intocado).
+    #
+    # Este override NÃO pode: transformar CARTÕES em mercado aprovado,
+    # criar sinal artificial, inventar linha/probabilidade/confiança,
+    # reduzir threshold, aumentar confiança ou modificar calibração.
+    # A oportunidade individual ainda precisa cumprir TODAS as regras do
+    # motor (aprovada_motor=True). Se o motor retornar NÃO ENTRAR, não
+    # há oportunidade ("SEM OPORTUNIDADE" é resultado válido). NULL
+    # permanece NULL (nunca zero).
+    # ------------------------------------------------------------------
+    "cartoes": {
+        "status_operacional": STATUS_OP_MODO_TESTE,
+        "status_estatistico": NAO_AVAL,  # preservado -- NÃO é aprovação
+        "origem": ORIGEM_OVERRIDE,
+        "decisao_humana": "true",
+        "modo_teste": "true",
+        "rotulo": ROTULO_MODO_TESTE,
+        "timestamp_override": "2026-09-15T00:00:00Z",
+        "motivo": (
+            "autorizacao expressa do operador (15/09/2026) para o mercado "
+            "de CARTOES funcionar operacionalmente em MODO TESTE: "
+            "processamento pelo motor oficial (bloco de calculo validado "
+            "src/cartoes.py), geracao de SaidaOficial, coleta de "
+            "resultados e auditoria posterior. Status estatistico real "
+            "NÃO_AVALIÁVEL preservado (limitacao estrutural da fonte: "
+            "red_cards NULL em 207/207 partidas da amostra 5D; sem "
+            "reclassificacao). Override NÃO cria sinal, NÃO altera "
+            "formula/threshold/calibracao e NÃO e aprovacao estatistica."
         ),
     },
 }
@@ -255,14 +302,17 @@ def _entry_opp(
     fx = varredura.fixture
     status_info = STATUS_MERCADOS.get(mercado, {"status": NAO_AVAL, "motivo": ""})
     override = OVERRIDE_OPERACIONAL.get(mercado)
-    # Origem da habilitação operacional: estatística (GOALS) ou override
-    # (CORNERS). Override preserva o status_estatistico real.
+    # Origem da habilitação operacional: estatística (GOALS), override
+    # (CORNERS) ou override em MODO TESTE (CARTÕES). Override preserva o
+    # status_estatistico real.
     if override is not None:
         origem_op = override["origem"]
         status_op = override["status_operacional"]
         decisao_oficial = "ENTRAR"
         timestamp_override = override.get("timestamp_override")
         motivo_override = override.get("motivo")
+        modo_teste = override.get("modo_teste") == "true"
+        rotulo_override = override.get("rotulo")
     else:
         origem_op = ORIGEM_ESTATISTICO
         status_op = STATUS_OP_ESTATISTICO
@@ -270,6 +320,8 @@ def _entry_opp(
             status_info["status"], "BLOQUEADO")
         timestamp_override = None
         motivo_override = None
+        modo_teste = False
+        rotulo_override = None
     return {
         "fixture_id": getattr(fx, "fixture_id", None),
         "espec": varredura.espec,
@@ -290,8 +342,12 @@ def _entry_opp(
         #  - estatistico: GOALS (APROVADO_PARA_PROXIMA_FASE)
         #  - override_usuario: CORNERS (override explícito, status
         #    estatístico real preservado em status_estatistico)
+        #  - override_usuario + modo_teste: CARTÕES (MODO TESTE —
+        #    rotulado como NÃO VALIDADO ESTATISTICAMENTE)
         "origem_operacional": origem_op,
         "status_operacional": status_op,
+        "modo_teste": modo_teste,
+        "rotulo_override": rotulo_override,
         "timestamp_override": timestamp_override,
         "motivo_override": motivo_override,
         "prediction_timestamp": None,  # preenchido pelo caller (generated_at)
@@ -306,7 +362,8 @@ def _rota_mercado(mercado: str) -> str:
     Override operacional explícito (OVERRIDE_OPERACIONAL) tem precedência
     sobre o status estatístico para o GATE operacional -- MAS o status
     estatístico real é preservado na entrada (status_estatistico). Override
-    NÃO é aprovação estatística.
+    NÃO é aprovação estatística. CARTÕES roteia com o rótulo MODO TESTE
+    (rotulo_override) — nunca como mercado aprovado.
     """
     if mercado in OVERRIDE_OPERACIONAL:
         return "operational"
@@ -443,8 +500,12 @@ def _construir_saida(
                 "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
                 "operacional por aprovacao ESTATISTICA. CORNERS vira "
                 "oportunidade operacional por OVERRIDE explicito do operador "
-                "(status estatistico real EM_OBSERVAÇÃO preservado). Demais "
-                "mercados: observacao ou bloqueado."
+                "(status estatistico real EM_OBSERVAÇÃO preservado). CARTOES "
+                "e processado pelo motor e roteia em MODO TESTE por "
+                "override autorizado do operador (rotulo: MODO TESTE - "
+                "OVERRIDE AUTORIZADO PELO USUARIO - NAO VALIDADO "
+                "ESTATISTICAMENTE; status estatistico real NAO_AVALIÁVEL "
+                "preservado). Demais mercados: observacao ou bloqueado."
             ),
         },
         nenhum_aprovado=nenhum,
@@ -461,8 +522,11 @@ def analisar_fixture(
 
     Consome scan_pregame_opportunities (motor) com registrar=False (READ:
     não congela recomendação no registro). Inclui resultado (observação,
-    sem custo extra de API). NÃO inclui cartoes (NAO_AVALIAVEL; evita
-    chamada extra de league_cards_average -- sem valor operacional).
+    sem custo extra de API) E o TOTAL de cartões (bloco validado
+    src/cartoes.py; benchmark real da competição via
+    league_cards_average). CARTÕES roteia em MODO TESTE por override
+    autorizado do operador (15/09/2026) — status estatístico real
+    NÃO_AVALIÁVEL preservado; o override não cria sinal.
 
     O motor decide (Poisson, confianca, aprovação). Esta camada apenas
     roteia a saída pelo status estatístico de cada mercado.
@@ -470,7 +534,7 @@ def analisar_fixture(
     generated_at = now_brt().strftime("%Y-%m-%d %H:%M:%S")
     varredura = scan_pregame_opportunities(
         client, espec, registrar=registrar,
-        incluir_resultado=True, incluir_cartoes=False,
+        incluir_resultado=True, incluir_cartoes=True,
     )
     return _construir_saida(varredura, generated_at)
 
@@ -552,9 +616,11 @@ def varredura_data(
                 "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
                 "operacional por aprovacao ESTATISTICA. CORNERS vira "
                 "oportunidade operacional por OVERRIDE explicito do operador "
-                "(status estatistico real EM_OBSERVAÇÃO preservado). "
-                "Resultado em observacao. Cards/Live/ROI bloqueados ou nao "
-                "avaliaveis."
+                "(status estatistico real EM_OBSERVAÇÃO preservado). CARTOES "
+                "processado em MODO TESTE por override autorizado do "
+                "operador (NAO VALIDADO ESTATISTICAMENTE; status estatistico "
+                "real NAO_AVALIÁVEL preservado). Resultado em observacao. "
+                "Pressao live e ROI bloqueados."
             ),
         },
     }
@@ -578,8 +644,15 @@ def formatar_saida(saida: SaidaOficial) -> str:
         L.append("-- OPORTUNIDADES OPERACIONAIS --")
         for o in saida.operational_opportunities:
             origem = o.get("origem_operacional", "estatistico")
-            tag = "OVERRIDE" if origem == "override_usuario" else "ESTATISTICO"
+            if o.get("modo_teste"):
+                tag = "TESTE-OVERRIDE"
+            elif origem == "override_usuario":
+                tag = "OVERRIDE"
+            else:
+                tag = "ESTATISTICO"
             L.append(f"  [{tag}] {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']} | {o['decisao_oficial']} (status_estat={o['status_estatistico']})")
+            if o.get("rotulo_override"):
+                L.append(f"         {o['rotulo_override']}")
     else:
         L.append("-- OPORTUNIDADES OPERACIONAIS: NENHUMA APROVADA --")
     if saida.observations:
@@ -604,8 +677,15 @@ def formatar_varredura(res: dict[str, Any]) -> str:
         L.append("-- OPORTUNIDADES OPERACIONAIS --")
         for o in res["operational_opportunities"]:
             origem = o.get("origem_operacional", "estatistico")
-            tag = "OVERRIDE" if origem == "override_usuario" else "ESTATISTICO"
+            if o.get("modo_teste"):
+                tag = "TESTE-OVERRIDE"
+            elif origem == "override_usuario":
+                tag = "OVERRIDE"
+            else:
+                tag = "ESTATISTICO"
             L.append(f"  [{tag}] {o['espec']} | {o['mercado']} | {o['linha']} | prob={o['prob']} conf={o['confianca']}")
+            if o.get("rotulo_override"):
+                L.append(f"         {o['rotulo_override']}")
     else:
         L.append("-- NENHUMA OPORTUNIDADE OPERACIONAL APROVADA --")
     if res["observations"]:
@@ -653,6 +733,8 @@ def _entry_opp_live(candidato: Any, av: Any, mercado: str) -> dict[str, Any]:
         decisao_oficial = "ENTRAR"
         timestamp_override = override.get("timestamp_override")
         motivo_override = override.get("motivo")
+        modo_teste_mercado = override.get("modo_teste") == "true"
+        rotulo_override = override.get("rotulo")
     else:
         origem_op = ORIGEM_ESTATISTICO
         status_op = STATUS_OP_ESTATISTICO
@@ -660,6 +742,8 @@ def _entry_opp_live(candidato: Any, av: Any, mercado: str) -> dict[str, Any]:
             status_info["status"], "BLOQUEADO")
         timestamp_override = None
         motivo_override = None
+        modo_teste_mercado = False
+        rotulo_override = None
     odd = getattr(av, "odd", None)
     return {
         "fixture_id": av.fixture_id,
@@ -679,6 +763,8 @@ def _entry_opp_live(candidato: Any, av: Any, mercado: str) -> dict[str, Any]:
         "motivo_status": status_info["motivo"],
         "origem_operacional": origem_op,
         "status_operacional": status_op,
+        "modo_teste_mercado": modo_teste_mercado,
+        "rotulo_override": rotulo_override,
         "timestamp_override": timestamp_override,
         "motivo_override": motivo_override,
         "riscos": list(av.riscos),
