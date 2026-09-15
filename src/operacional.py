@@ -35,6 +35,7 @@ from __future__ import annotations
 import re
 import subprocess
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
 from typing import Any
 
 from src.fixtures import get_fixtures_today
@@ -150,6 +151,34 @@ OVERRIDE_OPERACIONAL: dict[str, dict[str, str]] = {
     },
 }
 
+# ----------------------------------------------------------------------
+# OVERRIDE DE MODO TESTE LIVE (auditável) -- habilita o fluxo LIVE
+# operacionalmente em MODO TESTE, INDEPENDENTE do status estatístico.
+# NÃO é aprovação estatística: pressao_live permanece BLOQUEADO /
+# NÃO_VALIDADO em STATUS_MERCADOS (intocado). O override habilita apenas
+# a observação/coleta/teste live; NÃO cria sinal -- só aparecem
+# oportunidades que o motor live retornar ENTRAR (aprovada_motor=True).
+# Auditável: timestamp + decisão humana + motivo + versão do projeto
+# (versao_projeto populada em runtime via _projeto_hash() na saída).
+# ----------------------------------------------------------------------
+VERSAO_LIVE_OP = "live-op-1.0-experimental"           # motor live (src/live_opportunity.py)
+VERSAO_CAMADA_LIVE = "operacional-live-0.1-teste"     # camada live (gate/formato)
+STATUS_OP_LIVE_TESTE = "HABILITADO_PARA_TESTE_POR_OVERRIDE_DO_USUARIO"
+TIMESTAMP_OVERRIDE_LIVE = "2026-09-14T20:30:00Z"
+MOTIVO_OVERRIDE_LIVE = "Liberação explícita do operador para coleta e teste live"
+# Frescor: espelha src/live_opportunity.AUDIT_FRESHNESS_SEG (single source
+# of truth lá; literal aqui para não acoplar import do motor live no topo).
+_LIVE_FRESHNESS_SEG = 180
+MODO_TESTE_LIVE: dict[str, str] = {
+    "modo_teste": "true",
+    "status_estatistico": BLOQUEADO,            # pressao_live NÃO_VALIDADO
+    "status_operacional": STATUS_OP_LIVE_TESTE,
+    "override_operador": "true",
+    "decisao_humana": "true",
+    "motivo": MOTIVO_OVERRIDE_LIVE,
+    "timestamp_override": TIMESTAMP_OVERRIDE_LIVE,
+}
+
 # Decisão oficial por status (o gate operacional -- distinto da decisão do
 # motor, que e preservada como aprovada_motor).
 _DECISAO_OFICIAL_POR_STATUS = {
@@ -209,6 +238,10 @@ class SaidaOficial:
     blocked: list[dict[str, Any]] = field(default_factory=list)
     provenance: dict[str, Any] = field(default_factory=dict)
     nenhum_aprovado: bool = True
+    # Extensão LIVE (modo teste) -- aditiva; defaults preservam o pré-live.
+    mode: str = "prejogo"           # "prejogo" | "live"
+    modo_teste: bool = False        # True somente em saídas live
+    live: dict[str, Any] = field(default_factory=dict)  # bloco live
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -580,4 +613,322 @@ def formatar_varredura(res: dict[str, Any]) -> str:
         L.append(f"-- OBSERVAÇÕES (EM_OBSERVAÇÃO): {len(res['observations'])} --")
     if res["blocked"]:
         L.append(f"-- BLOQUEADOS/NÃO AVALIÁVEIS: {len(res['blocked'])} --")
+    return "\n".join(L)
+
+
+# ----------------------------------------------------------------------
+# 11. MODO TESTE LIVE -- Saída oficial canônica live
+# ----------------------------------------------------------------------
+# Consome o motor live existente (src/live_opportunity.scan_live_opportunities)
+# sem duplicar matemática. Override de MODO (MODO_TESTE_LIVE) habilita o fluxo
+# live operacionalmente em teste; NÃO cria sinal. pressao_live permanece
+# BLOQUEADO. GOALS (estatístico) e CORNERS (override de mercado) roteiam como
+# no pré-live. Sem aposta financeira.
+def _live_freshness(hora_str: str) -> str:
+    """Classifica o frescor da varredura live a partir do timestamp da
+    triagem (varredura.hora, formato dd/mm/YYYY HH:MM:SS). 'FRESCO' se o
+    delta estiver em [0, _LIVE_FRESHNESS_SEG]; 'STALE' caso contrário ou
+    se não for parseable."""
+    try:
+        t = datetime.strptime(hora_str, "%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return "STALE"
+    now = now_brt()
+    if now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+    delta = (now - t).total_seconds()
+    return "FRESCO" if 0 <= delta <= _LIVE_FRESHNESS_SEG else "STALE"
+
+
+def _entry_opp_live(candidato: Any, av: Any, mercado: str) -> dict[str, Any]:
+    """Constrói uma entrada live a partir de uma Avaliacao do motor live
+    (src/live_opportunity.Avaliacao) + Candidato.snapshot. NÃO altera
+    prob/confianca/linha -- copia direto do motor live."""
+    snap = candidato.snapshot
+    status_info = STATUS_MERCADOS.get(mercado, {"status": NAO_AVAL, "motivo": ""})
+    override = OVERRIDE_OPERACIONAL.get(mercado)
+    if override is not None:
+        origem_op = override["origem"]
+        status_op = override["status_operacional"]
+        decisao_oficial = "ENTRAR"
+        timestamp_override = override.get("timestamp_override")
+        motivo_override = override.get("motivo")
+    else:
+        origem_op = ORIGEM_ESTATISTICO
+        status_op = STATUS_OP_ESTATISTICO
+        decisao_oficial = _DECISAO_OFICIAL_POR_STATUS.get(
+            status_info["status"], "BLOQUEADO")
+        timestamp_override = None
+        motivo_override = None
+    odd = getattr(av, "odd", None)
+    return {
+        "fixture_id": av.fixture_id,
+        "espec": av.jogo,
+        "competicao": av.competicao,
+        "home": snap.home_team_name,
+        "away": snap.away_team_name,
+        "kickoff": snap.date_local,
+        "mercado": mercado,
+        "linha": av.linha,
+        "lado": _lado_de_linha(av.linha),
+        "prob": av.prob,
+        "confianca": av.confianca,
+        "aprovada_motor": True,
+        "decisao_oficial": decisao_oficial,
+        "status_estatistico": status_info["status"],
+        "motivo_status": status_info["motivo"],
+        "origem_operacional": origem_op,
+        "status_operacional": status_op,
+        "timestamp_override": timestamp_override,
+        "motivo_override": motivo_override,
+        "riscos": list(av.riscos),
+        "source": f"motor:{VERSAO_LIVE_OP}",
+        # Campos live (do motor live, NÃO recalculados pela camada):
+        "live_minute": av.minuto,            # None = NÃO DISPONÍVEL (NULL != ZERO)
+        "score": av.placar,
+        "status_live": av.status,
+        "provider": "API-Football v3 (api-sports.io)",
+        "odd": getattr(odd, "odd", None) if odd is not None else None,
+        "classificacao": av.classificacao,
+        "modo_teste": True,
+        "prediction_timestamp": None,        # preenchido pelo caller (generated_at)
+    }
+
+
+def _construir_saida_live(varredura: Any, generated_at: str) -> SaidaOficial:
+    """Constrói a SaidaOficial LIVE (modo teste) a partir da Varredura do
+    motor live (scan_live_opportunities). Função pura da saída do motor --
+    mesma entrada => mesma saída. NÃO recalcula prob/confianca/linha; apenas
+    roteia pelo status estatístico + override. Override de modo NÃO cria
+    sinal: só aprovadas do motor live (aprovada_motor=True) roteiam."""
+    data_freshness = _live_freshness(getattr(varredura, "hora", ""))
+    stale = (data_freshness == "STALE")
+
+    # markets: status por mercado + contagens do motor live
+    markets: dict[str, dict[str, Any]] = {}
+    for mk, info in STATUS_MERCADOS.items():
+        markets[mk] = {
+            "status": info["status"], "motivo": info["motivo"],
+            "avaliacoes_motor": 0, "aprovadas_motor": 0,
+        }
+    for cand in varredura.candidatos:
+        for av in cand.avaliacoes:
+            mk = av.mercado
+            if mk in markets:
+                markets[mk]["avaliacoes_motor"] += 1
+    ap_por_mercado: dict[str, int] = {}
+    for av in varredura.aprovadas:
+        ap_por_mercado[av.mercado] = ap_por_mercado.get(av.mercado, 0) + 1
+    for mk, n in ap_por_mercado.items():
+        if mk in markets:
+            markets[mk]["aprovadas_motor"] = n
+
+    # mapa fixture_id -> Candidato (para snapshot/home/away)
+    cand_by_fx = {c.snapshot.fixture_id: c for c in varredura.candidatos}
+
+    operational: list[dict[str, Any]] = []
+    observations: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+
+    # Aprovadas pelo motor live, roteadas pelo status + override de mercado.
+    for av in varredura.aprovadas:
+        cand = cand_by_fx.get(av.fixture_id)
+        if cand is None:
+            continue  # sem candidato/snapshot seguro => não vira oportunidade
+        entry = _entry_opp_live(cand, av, av.mercado)
+        entry["prediction_timestamp"] = generated_at
+        if stale:
+            # Dado live desatualizado: NÃO vira oportunidade operacional.
+            entry["decisao_oficial"] = "DADO_LIVE_DESATUALIZADO"
+            entry["status_operacional"] = None
+            entry["origem_operacional"] = None
+            observations.append(entry)
+            continue
+        rota = _rota_mercado(av.mercado)
+        if rota == "operational":
+            operational.append(entry)
+        elif rota == "observation":
+            observations.append(entry)
+        else:
+            blocked.append(entry)
+
+    # Observação (classe C) do motor live -- nunca operacional.
+    for av in getattr(varredura, "observacao", []) or []:
+        cand = cand_by_fx.get(av.fixture_id)
+        if cand is None:
+            continue
+        entry = _entry_opp_live(cand, av, av.mercado)
+        entry["aprovada_motor"] = False
+        entry["decisao_oficial"] = "OBSERVACAO"
+        entry["status_operacional"] = None
+        entry["origem_operacional"] = None
+        entry["prediction_timestamp"] = generated_at
+        observations.append(entry)
+
+    # Mercados não-pre-game (pressao_live, odds_roi): blocked status-only.
+    for mk in STATUS_MERCADOS:
+        if mk in _MERCADOS_PRE_GAME:
+            continue
+        info = STATUS_MERCADOS[mk]
+        blocked.append({
+            "fixture_id": None,
+            "espec": "VARREDURA LIVE",
+            "mercado": mk,
+            "status_estatistico": info["status"],
+            "motivo_status": info["motivo"],
+            "decisao_oficial": _DECISAO_OFICIAL_POR_STATUS[info["status"]],
+            "source": "registro_status_mercados",
+        })
+
+    nenhum = len(operational) == 0
+    total_ao_vivo = getattr(varredura, "total_ao_vivo", 0)
+    proj_hash = _projeto_hash()
+    live_block = {
+        "total_ao_vivo": total_ao_vivo,
+        "total_elegiveis": getattr(varredura, "total_elegiveis", 0),
+        "total_triados": getattr(varredura, "total_triados", 0),
+        "status_estatistico": BLOQUEADO,
+        "status_operacional": STATUS_OP_LIVE_TESTE,
+        "override_operador": "true",
+        "decisao_humana": "true",
+        "timestamp_override": TIMESTAMP_OVERRIDE_LIVE,
+        "motivo_override": MOTIVO_OVERRIDE_LIVE,
+        "data_freshness": data_freshness,
+        "versao_projeto": proj_hash,
+    }
+    return SaidaOficial(
+        fixture_id=None,
+        espec="VARREDURA LIVE",
+        generated_at=generated_at,
+        engine_version=VERSAO_LIVE_OP,
+        camada_version=VERSAO_CAMADA_LIVE,
+        projeto_hash=proj_hash,
+        data_status=("LIVE" if total_ao_vivo > 0 else "SEM_JOGO_LIVE"),
+        markets=markets,
+        operational_opportunities=operational,
+        observations=observations,
+        blocked=blocked,
+        provenance={
+            "motor": VERSAO_LIVE_OP,
+            "camada": VERSAO_CAMADA_LIVE,
+            "projeto_hash": proj_hash,
+            "generated_at": generated_at,
+            "fonte_dados": "API-Football v3 (api-sports.io)",
+            "nota": (
+                "LIVE em MODO TESTE por override explicito do operador. "
+                "NÃO validado estatisticamente (pressao_live BLOQUEADO). "
+                "Override de MODO NÃO cria sinal: só aparecem oportunidades "
+                "que o motor live retornar ENTRAR (aprovada_motor=True). "
+                "GOALS (estatístico) e CORNERS (override de mercado) "
+                "roteados como no pré-live. Sem aposta financeira."
+            ),
+        },
+        nenhum_aprovado=nenhum,
+        mode="live",
+        modo_teste=True,
+        live=live_block,
+    )
+
+
+def varredura_live(
+    client: Any, mercados: tuple[str, ...] | None = None,
+) -> SaidaOficial:
+    """Saída oficial canônica LIVE (modo teste) da varredura ao vivo.
+
+    Consome scan_live_opportunities (motor live, READ: não registra no
+    registro de validação, não grava histórico de validação) e roteia pelo
+    status estatístico + override. Modo teste: override de MODO não cria
+    sinal; só oportunidades que o motor live retornar ENTRAR. Nenhuma aposta
+    financeira executada/integrada.
+    """
+    from src.live_opportunity import scan_live_opportunities
+    from src.policy import classificar_liga
+
+    generated_at = now_brt().strftime("%Y-%m-%d %H:%M:%S")
+    varredura = scan_live_opportunities(client, mercados=mercados)
+
+    # Política forte (mesmo filtro de universo do cmd_aovivoop): aprovadas
+    # de competicoes EXCLUIDA não são operacionais. Cálculo do motor intacto.
+    mantidas = []
+    for av in varredura.aprovadas:
+        cand = next((c for c in varredura.candidatos
+                     if c.snapshot.fixture_id == av.fixture_id), None)
+        if cand is None:
+            mantidas.append(av)
+            continue
+        classe, _motivo = classificar_liga(
+            cand.snapshot.league_id, cand.snapshot.league_name)
+        if classe != "EXCLUIDA":
+            mantidas.append(av)
+    varredura.aprovadas = mantidas
+
+    return _construir_saida_live(varredura, generated_at)
+
+
+def formatar_saida_live(saida: SaidaOficial) -> str:
+    """Resumo textual legível da SaidaOficial LIVE (modo teste). Não substitui
+    o dict canônico (to_dict/--json)."""
+    L: list[str] = []
+    L.append(
+        f"=== SAÍDA OFICIAL LIVE · {saida.engine_version} "
+        f"(camada {saida.camada_version}) ===")
+    L.append(
+        f"mode={saida.mode} · modo_teste={saida.modo_teste} "
+        f"· data_status={saida.data_status}")
+    L.append(
+        f"generated_at: {saida.generated_at} · projeto_hash: {saida.projeto_hash}")
+    lv = saida.live or {}
+    L.append(
+        f"live: ao_vivo={lv.get('total_ao_vivo')} "
+        f"elegiveis={lv.get('total_elegiveis')} "
+        f"triados={lv.get('total_triados')} frescor={lv.get('data_freshness')}")
+    L.append(
+        f"       status_estat={lv.get('status_estatistico')} "
+        f"status_op={lv.get('status_operacional')} "
+        f"override={lv.get('override_operador')}")
+    L.append("")
+    L.append("-- status por mercado --")
+    for mk, info in saida.markets.items():
+        L.append(
+            f"  {mk:14s} {info['status']:24s} "
+            f"av={info['avaliacoes_motor']} aprov_motor={info['aprovadas_motor']}")
+    L.append("")
+    if saida.operational_opportunities:
+        L.append("-- OPORTUNIDADES OPERACIONAIS LIVE (MODO TESTE) --")
+        for o in saida.operational_opportunities:
+            origem = o.get("origem_operacional", "estatistico")
+            tag = "OVERRIDE" if origem == "override_usuario" else "ESTATISTICO"
+            odd = o.get("odd")
+            odd_txt = f" odd={odd}" if odd else ""
+            minuto = o.get("live_minute")
+            minuto_txt = "NÃO DISPONÍVEL" if minuto is None else f"{minuto}'"
+            L.append(
+                f"  [{tag}] {o.get('espec')} {minuto_txt} {o.get('score')} | "
+                f"{o['mercado']} | {o['linha']} | prob={o['prob']} "
+                f"conf={o['confianca']}{odd_txt} | {o['decisao_oficial']} "
+                f"(status_estat={o['status_estatistico']})")
+    else:
+        if (saida.live or {}).get("total_ao_vivo", 0) == 0:
+            L.append("-- NENHUM JOGO AO VIVO ELEGÍVEL DISPONÍVEL PARA TESTE AGORA --")
+        else:
+            L.append("-- OPORTUNIDADES OPERACIONAIS LIVE: NENHUMA APROVADA PELO MOTOR --")
+    if (saida.live or {}).get("data_freshness") == "STALE":
+        L.append(
+            "[AVISO] DADO LIVE DESATUALIZADO — nenhuma oportunidade operacional gerada.")
+    if saida.observations:
+        L.append("")
+        L.append(f"-- OBSERVAÇÕES LIVE: {len(saida.observations)} --")
+        for o in saida.observations[:20]:
+            minuto = o.get("live_minute")
+            minuto_txt = "NÃO DISPONÍVEL" if minuto is None else f"{minuto}'"
+            L.append(
+                f"  {o.get('espec')} {minuto_txt} | {o.get('mercado')} | "
+                f"{o.get('linha')} | {o['decisao_oficial']}")
+    if saida.blocked:
+        L.append("")
+        L.append("-- BLOQUEADOS / NÃO AVALIÁVEIS --")
+        for b in saida.blocked:
+            L.append(
+                f"  {b['mercado']:14s} {b['decisao_oficial']} "
+                f"({b['status_estatistico']})")
     return "\n".join(L)

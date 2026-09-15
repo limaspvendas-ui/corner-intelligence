@@ -571,6 +571,31 @@ def cmd_varredura(args: argparse.Namespace) -> str:
     return formatar_varredura(res)
 
 
+def cmd_aovivooficial(args: argparse.Namespace) -> str:
+    """LIVE em MODO TESTE: saída OFICIAL canônica da varredura ao vivo.
+
+    Consome o motor live existente (scan_live_opportunities, READ: não
+    registra no registro de validação, não altera histórico) e roteia pelo
+    status estatístico + override. LIVE é HABILITADO_PARA_TESTE_POR_OVERRIDE
+    do operador -- NÃO validado estatisticamente (pressao_live BLOQUEADO).
+    Override de MODO não cria sinal: só oportunidades que o motor live
+    retornar ENTRAR (aprovada_motor=True). GOALS (estatístico) e CORNERS
+    (override de mercado) roteiam como no pré-live. Sem aposta financeira.
+
+    --mercado restringe QUAIS familias o deep dive avalia (não altera
+    cálculo). --json emite a saída canônica completa (SaidaOficial.to_dict),
+    consumível por API/MCP/ChatGPT. Sem --json, resumo legível."""
+    from src.operacional import varredura_live, formatar_saida_live
+
+    mercados = None if args.mercado == "todos" else (args.mercado,)
+    saida = varredura_live(args.client, mercados=mercados)
+    if getattr(args, "json", False):
+        import json as _json
+        return _json.dumps(saida.to_dict(), ensure_ascii=False, indent=2,
+                           default=str)
+    return formatar_saida_live(saida)
+
+
 def cmd_oddscoleta(args: argparse.Namespace) -> str:
     """ETAPA 5F: coleta PROSPECTIVA de odds reais (pre-match e live),
     SEPARADA do motor. NAO altera probabilidade/aprovacao/thresholds/regra
@@ -936,6 +961,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="emite a saída canônica completa")
     p.set_defaults(fn=cmd_varredura)
+
+    p = sub.add_parser(
+        "aovivooficial",
+        help="LIVE MODO TESTE: saída OFICIAL canônica da varredura ao vivo "
+             "(consome o motor live; override de modo não cria sinal; "
+             "pressao_live BLOQUEADO; sem aposta financeira)",
+    )
+    p.add_argument(
+        "--mercado", default="todos",
+        choices=["todos", "escanteios", "gols", "cartoes", "resultado"],
+        help="restringe QUAIS familias o deep dive avalia (não altera cálculo)")
+    p.add_argument("--json", action="store_true",
+                   help="emite a saída canônica completa (SaidaOficial)")
+    p.set_defaults(fn=cmd_aovivooficial)
 
     return parser
 
