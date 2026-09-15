@@ -129,6 +129,42 @@ def _envelope(
     return body
 
 
+def _erro_fonte(mode: str, exc: Exception) -> dict[str, Any]:
+    """Envelope ESTRUTURADO de falha de fonte (Etapa 12 — nunca 500
+    genérico, nunca "zero oportunidades").
+
+    Shape: {success:false, erro_codigo: SOURCE_*, fonte, motivo,
+    fallback_ativado, fonte_fallback, data:{status:"NAO_DISPONIVEL"}}.
+    A falha da fonte NÃO é convertida em resultado esportivo válido.
+    """
+    from src.exceptions import SourceError
+    from src.provider_router import provenancia_fontes
+
+    if not isinstance(exc, SourceError):  # pragma: no cover - defesa
+        return _envelope(False, mode, None,
+                         extra={"erro": f"{type(exc).__name__}: {exc}"})
+    fontes = provenancia_fontes()
+    utilizada = [
+        v.get("fonte_utilizada") for v in fontes.values()
+        if v.get("fallback_ativado")
+    ]
+    return _envelope(
+        False, mode,
+        {"status": "NAO_DISPONIVEL",
+         "nota": ("FALHA DE FONTE — não é resultado esportivo: não "
+                  "significa ausência de jogos nem de oportunidades. "
+                  "Nenhum dado foi inventado; NULL permanece NULL.")},
+        extra={
+            "erro": str(exc),
+            "erro_codigo": exc.code,
+            "fonte": exc.fonte,
+            "motivo": exc.motivo,
+            "fallback_ativado": bool(utilizada),
+            "fonte_fallback": (utilizada[-1] if utilizada else None),
+        },
+    )
+
+
 def _db_status() -> dict[str, Any]:
     """Status do banco (somente leitura; sem segredos)."""
     try:
@@ -139,6 +175,18 @@ def _db_status() -> dict[str, Any]:
         c.close()
         return {"ok": True, "integrity_check": integrity,
                 "user_version": user_version}
+    except Exception as e:  # pragma: no cover
+        return {"ok": False, "erro": f"{type(e).__name__}: {e}"}
+
+
+def _status_fontes() -> dict[str, Any]:
+    """Status operacional das fontes (Etapa 11): cota API-Football,
+    circuit breakers, fallback e consumo. Tolerante a falha — nunca
+    expõe valor/prefixo/sufixo/tamanho/hash de credencial."""
+    try:
+        from src.source_health import status_operacional_fontes
+
+        return status_operacional_fontes()
     except Exception as e:  # pragma: no cover
         return {"ok": False, "erro": f"{type(e).__name__}: {e}"}
 
@@ -205,6 +253,9 @@ def verificar_status() -> dict[str, Any]:
         "engine_version_prelive": VERSAO_PREJOGO_OP,
         "engine_version_live": VERSAO_LIVE_OP,
         "database": _db_status(),
+        # Status operacional das FONTES (Etapa 11): plano, cota do dia,
+        # circuit breaker por provedor, fallback e consumo — sem segredos.
+        "fontes": _status_fontes(),
         "prelive": prelive_block,
         "live": live_block,
         "modo_teste_live": MODO_TESTE_LIVE["modo_teste"] == "true",
@@ -227,9 +278,13 @@ def buscar_jogos_do_dia(
     except Exception as e:
         return _envelope(False, "prelive", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    from src.fixtures import get_fixtures_today
+    from src.exceptions import SourceError
+    from src.provider_router import get_fixtures_today
 
-    fixtures = get_fixtures_today(client, on_date=date)
+    try:
+        fixtures = get_fixtures_today(client, on_date=date)
+    except SourceError as e:
+        return _erro_fonte("prelive", e)
     elegiveis: list[dict[str, Any]] = []
     inelegiveis: list[dict[str, Any]] = []
     for fx in fixtures:
@@ -278,7 +333,12 @@ def varredura_prelive(
     except Exception as e:
         return _envelope(False, "prelive", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    res = varredura_data(client, date)
+    from src.exceptions import SourceError
+
+    try:
+        res = varredura_data(client, date)
+    except SourceError as e:
+        return _erro_fonte("prelive", e)
     data = {
         "date": res["data"],
         "fixtures_considerados": res["fixtures_considerados"],
@@ -318,37 +378,41 @@ def analisar_partida_prelive(
     except Exception as e:
         return _envelope(False, "prelive", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    from src.fixtures import get_fixture_by_id
+    from src.exceptions import SourceError
+    from src.provider_router import get_fixture_by_id
 
-    fx = get_fixture_by_id(client, fixture_id)
-    if fx is None:
-        return _envelope(
-            False, "prelive", None,
-            extra={"erro": "fixture não encontrado",
-                   "fixture_id": fixture_id})
-    if fx.is_finished or fx.is_live:
-        return _envelope(
-            False, "prelive",
-            {"fixture_id": fixture_id, "status": fx.status,
-             "elegivel_pre": False},
-            extra={"erro": "fixture não é elegível pré-live "
-                           "(encerrado ou ao vivo)"})
-    ok, motivo = jogo_elegivel(
-        fx.league_id, fx.league_name,
-        fx.home_team_name, fx.away_team_name,
-    )
-    if not ok:
-        return _envelope(
-            False, "prelive",
-            {"fixture_id": fixture_id, "elegivel_pre": False,
-             "motivo_inelegivel": motivo},
-            extra={"erro": "fixture inelegível (universo oficial)"})
-    espec = f"{fx.home_team_name} x {fx.away_team_name}"
-    # Fixture conhecido em mãos (get_fixture_by_id): a identidade é
-    # ancorada pelos IDs do próprio fixture (regra 12), não re-resolvida
-    # por nome — a origem dos HTTP 500 em nomes ambíguos ("Valencia",
-    # "Platense", "Vasco da Gama", "Boca Juniors").
-    saida = analisar_fixture(client, espec, registrar=False, fixture=fx)
+    try:
+        fx = get_fixture_by_id(client, fixture_id)
+        if fx is None:
+            return _envelope(
+                False, "prelive", None,
+                extra={"erro": "fixture não encontrado",
+                       "fixture_id": fixture_id})
+        if fx.is_finished or fx.is_live:
+            return _envelope(
+                False, "prelive",
+                {"fixture_id": fixture_id, "status": fx.status,
+                 "elegivel_pre": False},
+                extra={"erro": "fixture não é elegível pré-live "
+                               "(encerrado ou ao vivo)"})
+        ok, motivo = jogo_elegivel(
+            fx.league_id, fx.league_name,
+            fx.home_team_name, fx.away_team_name,
+        )
+        if not ok:
+            return _envelope(
+                False, "prelive",
+                {"fixture_id": fixture_id, "elegivel_pre": False,
+                 "motivo_inelegivel": motivo},
+                extra={"erro": "fixture inelegível (universo oficial)"})
+        espec = f"{fx.home_team_name} x {fx.away_team_name}"
+        # Fixture conhecido em mãos (get_fixture_by_id): a identidade é
+        # ancorada pelos IDs do próprio fixture (regra 12), não re-resolvida
+        # por nome — a origem dos HTTP 500 em nomes ambíguos ("Valencia",
+        # "Platense", "Vasco da Gama", "Boca Juniors").
+        saida = analisar_fixture(client, espec, registrar=False, fixture=fx)
+    except SourceError as e:
+        return _erro_fonte("prelive", e)
     d = saida.to_dict()
     data = {
         "fixture_id": fixture_id,
@@ -377,7 +441,12 @@ def varredura_live_endpoint() -> dict[str, Any]:
     except Exception as e:
         return _envelope(False, "live", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    saida = varredura_live(client)
+    from src.exceptions import SourceError
+
+    try:
+        saida = varredura_live(client)
+    except SourceError as e:
+        return _erro_fonte("live", e)
     d = saida.to_dict()
     lv = d.get("live", {})
     data = {
@@ -416,16 +485,23 @@ def analisar_partida_live(
     except Exception as e:
         return _envelope(False, "live", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
+    from src.exceptions import SourceError
     from src.live import fetch_live_snapshot
 
-    snapshot = fetch_live_snapshot(client, fixture_id, record=False)
+    try:
+        snapshot = fetch_live_snapshot(client, fixture_id, record=False)
+    except SourceError as e:
+        return _erro_fonte("live", e)
     if snapshot is None:
         return _envelope(
             False, "live", {"fixture_id": fixture_id, "live": False},
             extra={"erro": "fixture não está ao vivo (ou não encontrado)",
                    "status": "NAO_DISPONIVEL"})
     # Lógica live: roda a varredura live oficial e extrai este fixture.
-    saida = varredura_live(client)
+    try:
+        saida = varredura_live(client)
+    except SourceError as e:
+        return _erro_fonte("live", e)
     d = saida.to_dict()
     opps = [o for o in d["operational_opportunities"]
             if o.get("fixture_id") == fixture_id]
@@ -552,11 +628,14 @@ def analisar_dados_da_partida(
     except Exception as e:
         return _envelope(False, "factual", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    from src.exceptions import DataUnavailableError
-    from src.fixtures import get_fixture_by_id
+    from src.exceptions import DataUnavailableError, SourceError
     from src.match_stats import fetch_match_stats, fetch_team_history
+    from src.provider_router import get_fixture_by_id
 
-    fx = get_fixture_by_id(client, fixture_id)
+    try:
+        fx = get_fixture_by_id(client, fixture_id)
+    except SourceError as e:
+        return _erro_fonte("factual", e)
     if fx is None:
         return _envelope(
             False, "factual", None,
@@ -611,6 +690,10 @@ def analisar_dados_da_partida(
             "disponivel": False,
             "motivo": f"dado não disponível na fonte: {e}",
         }
+    except SourceError as e:
+        # Falha de FONTE (quota/timeout/5xx): erro estruturado — nunca
+        # "estatísticas indisponíveis" mascarando indisponibilidade.
+        return _erro_fonte("factual", e)
 
     # Histórico recente (factual; jogos sem estatística são contabilizados,
     # nunca preenchidos)
@@ -661,11 +744,14 @@ def testar_coleta_automatica(
     except Exception as e:
         return _envelope(False, "factual", None,
                          extra={"erro": f"{type(e).__name__}: {e}"})
-    from src.exceptions import DataUnavailableError
-    from src.fixtures import get_fixtures_today
+    from src.exceptions import DataUnavailableError, SourceError
     from src.match_stats import fetch_match_stats, fetch_team_history
+    from src.provider_router import get_fixtures_today
 
-    fixtures = get_fixtures_today(client, on_date=date)
+    try:
+        fixtures = get_fixtures_today(client, on_date=date)
+    except SourceError as e:
+        return _erro_fonte("factual", e)
     elegiveis = [
         fx for fx in fixtures
         if not fx.is_finished and not fx.is_live
@@ -723,6 +809,8 @@ def testar_coleta_automatica(
             "disponivel": False,
             "motivo": f"dado não disponível na fonte: {e}",
         }
+    except SourceError as e:
+        return _erro_fonte("factual", e)
 
     # 2) histórico: 1 jogo encerrado por time valida o caminho de coleta
     for lado, team_id, team_name in (

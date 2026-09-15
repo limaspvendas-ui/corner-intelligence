@@ -134,7 +134,7 @@ def test_b_buscar_jogos_do_dia(client, monkeypatch):
         is_finished=False, is_live=False,
     )
     monkeypatch.setattr("src.fixtures.get_fixtures_today",
-                        lambda c, on_date=None: [fx])
+                        lambda c, league_id=None, on_date=None: [fx])
     r = client.get("/api/jogos-do-dia?date=2026-09-15")
     assert r.status_code == 200
     d = r.json()
@@ -510,7 +510,7 @@ def test_p2_partida_dados_fixture_nao_encontrado(client, monkeypatch):
 def test_q_teste_coleta_valida_coleta(client, monkeypatch):
     _patch_client(monkeypatch)
     monkeypatch.setattr("src.fixtures.get_fixtures_today",
-                        lambda c, on_date=None: [_fx_ns()])
+                        lambda c, league_id=None, on_date=None: [_fx_ns()])
     monkeypatch.setattr(
         "src.api_server.jogo_elegivel",
         lambda lid, ln, h, a, dados=None: (True, ""))
@@ -551,7 +551,7 @@ def test_q_teste_coleta_valida_coleta(client, monkeypatch):
 def test_q2_teste_coleta_sem_jogos(client, monkeypatch):
     _patch_client(monkeypatch)
     monkeypatch.setattr("src.fixtures.get_fixtures_today",
-                        lambda c, on_date=None: [])
+                        lambda c, league_id=None, on_date=None: [])
     r = client.get("/api/teste-coleta")
     assert r.status_code == 200
     d = r.json()["data"]

@@ -38,7 +38,12 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Any
 
-from src.fixtures import get_fixtures_today
+from src.exceptions import SourceError
+from src.provider_router import (
+    get_fixtures_today,
+    provenancia_fontes,
+    provenancia_reset,
+)
 from src.live import now_brt
 from src.policy import jogo_elegivel
 from src.prejogo_opportunity import (
@@ -495,6 +500,10 @@ def _construir_saida(
             "fixture_id": getattr(fx, "fixture_id", None),
             "competicao": getattr(fx, "league_name", None),
             "fonte_dados": "API-Football v3 (api-sports.io)",
+            # Procedência de FONTES (Etapa 8): fonte principal/utilizada,
+            # fallback ativado e motivo — sem alterar probabilidade,
+            # confiança, linha ou decisão (campos do motor intactos).
+            "fontes": provenancia_fontes(),
             "nota": (
                 "Decisao oficial = gate operacional sobre a saida do motor. "
                 "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
@@ -556,10 +565,13 @@ def varredura_data(
     APROVADA" (resultado válido).
     """
     generated_at = now_brt().strftime("%Y-%m-%d %H:%M:%S")
+    # Procedência da coleta (fontes/fallback) inicia limpa por varredura.
+    provenancia_reset()
     fixtures = get_fixtures_today(client, on_date=date_str)
 
     saidas: list[SaidaOficial] = []
     inelegiveis: list[dict[str, Any]] = []
+    fonte_indisponivel: list[dict[str, Any]] = []
     for fx in fixtures:
         if fx.is_finished or fx.is_live:
             continue
@@ -582,6 +594,19 @@ def varredura_data(
             saidas.append(
                 analisar_fixture(client, espec, registrar=False, fixture=fx)
             )
+        except SourceError as e:
+            # Erro de FONTE (quota esgotada, rate limit, timeout, 5xx):
+            # NUNCA vira "inelegível" nem "sem oportunidades" — o jogo é
+            # reportado separadamente como FONTE INDISPONÍVEL, com código
+            # estruturado, até a fonte voltar. (Etapa 12 do failover.)
+            fonte_indisponivel.append({
+                "fixture_id": fx.fixture_id,
+                "espec": espec,
+                "erro_codigo": e.code,
+                "fonte": e.fonte,
+                "motivo": e.motivo,
+                "mensagem": str(e)[:200],
+            })
         except Exception as e:
             inelegiveis.append({
                 "fixture_id": fx.fixture_id,
@@ -607,6 +632,11 @@ def varredura_data(
         "fixtures_considerados": len(fixtures),
         "fixtures_elegiveis": len(saidas),
         "fixtures_inelegiveis": inelegiveis,
+        # Jogos cuja análise FALHOU POR FONTE (quota/timeout/5xx): condição
+        # da fonte, NÃO resultado esportivo — nunca contabilizados como
+        # "sem oportunidade". Vazio quando a fonte está saudável.
+        "fixtures_fonte_indisponivel": fonte_indisponivel,
+        "fonte_indisponivel": bool(fonte_indisponivel),
         "operational_opportunities": opps,
         "observations": obs,
         "blocked": blk,
@@ -619,6 +649,7 @@ def varredura_data(
             "camada": VERSAO_CAMADA_OPERACIONAL,
             "projeto_hash": _projeto_hash(),
             "fonte_dados": "API-Football v3 (api-sports.io)",
+            "fontes": provenancia_fontes(),
             "nota": (
                 "GOALS (APROVADO_PARA_PROXIMA_FASE) vira oportunidade "
                 "operacional por aprovacao ESTATISTICA. CORNERS vira "

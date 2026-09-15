@@ -72,6 +72,46 @@ def parse_fixture(raw: dict[str, Any]) -> Fixture:
     )
 
 
+# ----------------------------------------------------------------------
+# Dedup de consumo (Etapa 10 do failover): fluxos diferentes pedem a
+# mesma lista com `last` diferente (pre-live 20, live 10, teste 1) e cada
+# valor de `last` gera uma CHAVE de cache distinta => gasto real de cota
+# para os mesmos jogos. Reuso: se um `last` MAIOR ja esta em cache e
+# valido (mesmo TTL), fatiamos os N mais recentes DELE — sem nova
+# chamada. Jogos encerrados sao imutaveis, e a API devolve os mais
+# recentes primeiro em `last=N`; o motor recebe exatamente os mesmos N
+# jogos mais recentes que a rede retornaria na janela de validade.
+# ----------------------------------------------------------------------
+_LADDER_LAST = (50, 20, 10, 5, 1)
+
+
+def _reuso_lista_maior(
+    client: APIFootballClient,
+    endpoint: str,
+    base_params: dict[str, Any],
+    last_desejado: int,
+) -> list[dict[str, Any]] | None:
+    """Procura em cache uma lista `last` MAIOR ainda valida e devolve os
+    `last_desejado` itens mais recentes. None se nao houver (fluxo normal
+    segue para a rede). Nao altera nenhum dado — apenas evita re-coletar
+    exatamente a mesma informacao."""
+    cache = getattr(client, "cache", None)
+    if cache is None:
+        return None
+    for maior in _LADDER_LAST:
+        if maior <= last_desejado:
+            continue
+        params = dict(base_params)
+        params["last"] = maior
+        try:
+            cached = cache.get(endpoint, params)
+        except Exception:
+            continue
+        if cached and len(cached) >= last_desejado:
+            return cached[:last_desejado]
+    return None
+
+
 def get_last_fixtures(
     client: APIFootballClient, team_id: int, last: int = 20
 ) -> list[Fixture]:
@@ -81,9 +121,13 @@ def get_last_fixtures(
     O parametro timezone garante que fixture.date venha da API ja em
     America/Sao_Paulo (sem conversao local).
     """
+    base = {"team": team_id, "timezone": DEFAULT_TIMEZONE}
+    reuso = _reuso_lista_maior(client, "/fixtures", base, last)
+    if reuso is not None:
+        return [parse_fixture(raw) for raw in reuso]
     response = client.get(
         "/fixtures",
-        params={"team": team_id, "last": last, "timezone": DEFAULT_TIMEZONE},
+        params={**base, "last": last},
     )
     return [parse_fixture(raw) for raw in response]
 
@@ -123,13 +167,13 @@ def get_h2h_fixtures(
     confrontos do que o solicitado. Datas em America/Sao_Paulo.
     """
     last = min(last, 50)
+    base = {"h2h": f"{team_a_id}-{team_b_id}", "timezone": DEFAULT_TIMEZONE}
+    reuso = _reuso_lista_maior(client, "/fixtures/headtohead", base, last)
+    if reuso is not None:
+        return [parse_fixture(raw) for raw in reuso]
     response = client.get(
         "/fixtures/headtohead",
-        params={
-            "h2h": f"{team_a_id}-{team_b_id}",
-            "last": last,
-            "timezone": DEFAULT_TIMEZONE,
-        },
+        params={**base, "last": last},
     )
     return [parse_fixture(raw) for raw in response]
 
