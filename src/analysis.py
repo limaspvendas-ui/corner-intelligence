@@ -247,40 +247,62 @@ def analyze_league(
 # Pre-jogo: analise completa de um confronto futuro
 # ----------------------------------------------------------------------
 def pre_match_analysis(
-    client: APIFootballClient, team_a_name: str, team_b_name: str
+    client: APIFootballClient, team_a_name: str, team_b_name: str,
+    fixture: Fixture | None = None,
 ) -> dict[str, Any]:
-    team_a = resolve_team_validated(
-        client, team_a_name, context=f"pre-jogo: '{team_a_name}'"
-    )
-    team_b = resolve_team_validated(
-        client, team_b_name, context=f"pre-jogo: '{team_b_name}'"
-    )
-
-    # Proximo jogo entre os dois (se houver)
+    """`fixture` (opcional): quando o fixture já é conhecido (endpoint por
+    fixture_id, varredura por data), os IDs das equipes vêm OBRIGATORIAMENTE
+    dele (regra de identidade: `fixture_teams`), validados por /teams?id=
+    contra o nome do próprio fixture. A resolução por nome — que nomes
+    ambíguos ("Valencia", "Platense", "Vasco da Gama", "Boca Juniors")
+    derrubam com AmbiguousTeamError nem existindo o fixture — NEM RODA.
+    Sem fixture, o caminho por nome permanece EXATAMENTE como era.
+    """
+    team_a: Team
+    team_b: Team
     next_fixture: Fixture | None = None
-    next_a = get_next_fixtures(client, team_a.id, next_n=10)
-    for fixture in next_a:
-        if fixture.involves(team_a.id, team_b.id):
-            next_fixture = fixture
-            break
+    if fixture is not None:
+        # REGRA DE IDENTIDADE (fixture conhecido): IDs do próprio fixture,
+        # revalidados por /teams?id=; divergência => IdentityDivergenceError
+        # (a análise não continua com outro clube por engano).
+        home_t, away_t = fixture_teams(
+            client, fixture,
+            expect_home=team_a_name, expect_away=team_b_name,
+        )
+        team_a, team_b = home_t, away_t
+        next_fixture = fixture
+    else:
+        team_a = resolve_team_validated(
+            client, team_a_name, context=f"pre-jogo: '{team_a_name}'"
+        )
+        team_b = resolve_team_validated(
+            client, team_b_name, context=f"pre-jogo: '{team_b_name}'"
+        )
 
-    # REGRA DE IDENTIDADE: com fixture conhecido, os IDs das equipes
-    # vem OBRIGATORIAMENTE do proprio fixture (revalidados por
-    # /teams?id= contra o nome registrado no fixture). Divergencia =>
-    # IdentityDivergenceError: a analise nao continua com outro clube.
-    if next_fixture is not None:
-        home_t, away_t = fixture_teams(client, next_fixture)
-        if {home_t.id, away_t.id} != {team_a.id, team_b.id}:
-            raise IdentityDivergenceError(
-                "DIVERGENCIA DE IDENTIDADE: as equipes do fixture "
-                f"{next_fixture.fixture_id} ({home_t.name} x {away_t.name}) "
-                f"nao correspondem aos times resolvidos "
-                f"({team_a.name} x {team_b.name}). Analise interrompida."
-            )
-        # Reancora: a partir daqui, TODOS os modulos usam os IDs do fixture
-        by_id = {home_t.id: home_t, away_t.id: away_t}
-        team_a = by_id[team_a.id]
-        team_b = by_id[team_b.id]
+        # Proximo jogo entre os dois (se houver)
+        next_a = get_next_fixtures(client, team_a.id, next_n=10)
+        for cand in next_a:
+            if cand.involves(team_a.id, team_b.id):
+                next_fixture = cand
+                break
+
+        # REGRA DE IDENTIDADE: com fixture conhecido, os IDs das equipes
+        # vem OBRIGATORIAMENTE do proprio fixture (revalidados por
+        # /teams?id= contra o nome registrado no fixture). Divergencia =>
+        # IdentityDivergenceError: a analise nao continua com outro clube.
+        if next_fixture is not None:
+            home_t, away_t = fixture_teams(client, next_fixture)
+            if {home_t.id, away_t.id} != {team_a.id, team_b.id}:
+                raise IdentityDivergenceError(
+                    "DIVERGENCIA DE IDENTIDADE: as equipes do fixture "
+                    f"{next_fixture.fixture_id} ({home_t.name} x {away_t.name}) "
+                    f"nao correspondem aos times resolvidos "
+                    f"({team_a.name} x {team_b.name}). Analise interrompida."
+                )
+            # Reancora: a partir daqui, TODOS os modulos usam os IDs do fixture
+            by_id = {home_t.id: home_t, away_t.id: away_t}
+            team_a = by_id[team_a.id]
+            team_b = by_id[team_b.id]
 
     # Historicos individuais
     games_a, un_a = fetch_team_history(client, team_a.id, DEFAULT_LAST_N, team_a.name)

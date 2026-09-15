@@ -357,6 +357,7 @@ def scan_pregame_opportunities(
     client: Any, espec: str, registrar: bool = True,
     incluir_resultado: bool = False,
     incluir_cartoes: bool = False,
+    fixture: Any = None,
 ) -> VarreduraPreJogo:
     """Observacao pre-jogo de UM confronto. Reusa pre_match_analysis
     (identidade validada + fixture + media da liga) COMO ESTA; depois
@@ -383,7 +384,14 @@ def scan_pregame_opportunities(
     essencial ausente no historico real) sai do fluxo inteiro - nunca e
     avaliado, aprovado ou registrado. PERMITIDO e OBSERVACAO seguem;
     quem impede a recomendacao automatica da classe C no fluxo
-    operacional (--politica) e o app, nao este scan."""
+    operacional (--politica) e o app, nao este scan.
+
+    `fixture` (opcional): fixture JÁ CONHECIDO (endpoint por fixture_id,
+    varredura por data). Passado adiante para pre_match_analysis, que
+    ancora a identidade pelos IDs do próprio fixture (regra 12) em vez de
+    re-resolver por nome — nomes ambíguos não derrubam mais um fixture
+    que já está em mãos. Sem fixture, nada muda.
+    """
     from src.analysis import pre_match_analysis
     from src.resolver import split_match_spec
 
@@ -394,7 +402,7 @@ def scan_pregame_opportunities(
         )
     team_a, team_b = pair
 
-    res = pre_match_analysis(client, team_a, team_b)
+    res = pre_match_analysis(client, team_a, team_b, fixture=fixture)
     fixture = res["proximo_jogo"]
     if fixture is None:
         return VarreduraPreJogo(

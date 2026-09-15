@@ -344,7 +344,11 @@ def analisar_partida_prelive(
              "motivo_inelegivel": motivo},
             extra={"erro": "fixture inelegível (universo oficial)"})
     espec = f"{fx.home_team_name} x {fx.away_team_name}"
-    saida = analisar_fixture(client, espec, registrar=False)
+    # Fixture conhecido em mãos (get_fixture_by_id): a identidade é
+    # ancorada pelos IDs do próprio fixture (regra 12), não re-resolvida
+    # por nome — a origem dos HTTP 500 em nomes ambíguos ("Valencia",
+    # "Platense", "Vasco da Gama", "Boca Juniors").
+    saida = analisar_fixture(client, espec, registrar=False, fixture=fx)
     d = saida.to_dict()
     data = {
         "fixture_id": fixture_id,

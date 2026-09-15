@@ -517,6 +517,7 @@ def _construir_saida(
 # ----------------------------------------------------------------------
 def analisar_fixture(
     client: Any, espec: str, registrar: bool = False,
+    fixture: Any = None,
 ) -> SaidaOficial:
     """Saída oficial canônica de UM fixture ("Time A x Time B").
 
@@ -535,6 +536,7 @@ def analisar_fixture(
     varredura = scan_pregame_opportunities(
         client, espec, registrar=registrar,
         incluir_resultado=True, incluir_cartoes=True,
+        fixture=fixture,
     )
     return _construir_saida(varredura, generated_at)
 
@@ -574,7 +576,12 @@ def varredura_data(
             continue
         espec = f"{fx.home_team_name} x {fx.away_team_name}"
         try:
-            saidas.append(analisar_fixture(client, espec, registrar=False))
+            # Fixture conhecido em mãos: a identidade é ancorada pelos
+            # IDs do próprio fixture (regra 12), não por resolução de
+            # nome — nomes ambíguos não derrubam mais jogos elegíveis.
+            saidas.append(
+                analisar_fixture(client, espec, registrar=False, fixture=fx)
+            )
         except Exception as e:
             inelegiveis.append({
                 "fixture_id": fx.fixture_id,
