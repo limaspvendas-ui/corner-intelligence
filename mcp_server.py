@@ -14,10 +14,7 @@ from typing import Any
 import requests
 from mcp.server.fastmcp import FastMCP
 
-BACKEND_URL = os.getenv(
-    "CORNER_BACKEND_URL",
-    "https://corner-intelligence-api.onrender.com",
-).rstrip("/")
+BACKEND_URL = os.getenv("CORNER_BACKEND_URL", "").strip().rstrip("/")
 PORT = int(os.getenv("PORT", "10000"))
 
 mcp = FastMCP(
@@ -36,7 +33,9 @@ mcp = FastMCP(
 
 
 def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    """GET resiliente para atravessar cold start do Render Free."""
+    """GET para backend explicitamente configurado; sem hospedagem padrao."""
+    if not BACKEND_URL:
+        raise RuntimeError("CORNER_BACKEND_URL_NAO_CONFIGURADA: backend remoto aposentado; use a CLI protegida local.")
     url = f"{BACKEND_URL}{path}"
     retry_delays = (0, 5, 10, 15, 20, 20)
     last_error: Exception | None = None
